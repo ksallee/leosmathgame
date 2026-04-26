@@ -277,7 +277,7 @@
 					groupsTakenIds = [...groupsTakenIds, g.id];
 				}
 			}
-			if (session.outcome !== before && session.outcome === 'lost') play('lose');
+			if (session.outcome !== before && session.outcome === 'lost') play('lose', 0.3);
 			session = session;
 		}
 		rafId = requestAnimationFrame(loop);
@@ -351,15 +351,15 @@
 				profile.level = playLevel + 1;
 			}
 			profile.lastViewedLevel = playLevel;
-			play('win');
+			play('win', 0.4);
 			// When a band-up triggers the purple "Niveau supérieur" badge, layer
 			// the level_up sparkle on top after the win fanfare settles.
 			if (lastTransitions.some((t) => !!t.bandChanged)) {
-				setTimeout(() => play('level_up', 0.7), 700);
+				setTimeout(() => play('level_up', 0.45), 700);
 			}
 			void saveProfile(profile);
 		} else if (session.outcome === 'lost') {
-			play('lose');
+			play('lose', 0.3);
 			void saveProfile(profile);
 		}
 		userAnswer = '';
@@ -412,8 +412,11 @@
 						🪙 <span class="num">{profile.coins}</span>
 					</div>
 				</div>
-				<div class="lifebar" aria-label="Distance du monstre">
-					<div class="lifebar-fill" style="width: {(session?.monsterPos ?? 0) * 100}%"></div>
+				<div class="progressbar" aria-label="Progression vers la victoire">
+					<div
+						class="progressbar-fill"
+						style="width: {((session?.correct ?? 0) / WIN_CORRECT) * 100}%"
+					></div>
 				</div>
 			</div>
 		</div>
@@ -764,15 +767,15 @@
 	.coin-pill {
 		color: var(--color-coin-500);
 	}
-	.lifebar {
+	.progressbar {
 		height: 6px;
 		background: rgba(0, 0, 0, 0.55);
 		border-radius: var(--radius-pill);
 		overflow: hidden;
 	}
-	.lifebar-fill {
+	.progressbar-fill {
 		height: 100%;
-		background: linear-gradient(90deg, #facc15, #f59e0b, #ef4444);
+		background: linear-gradient(90deg, #4ade80, #22c55e, #facc15);
 		transition: width var(--motion-normal) var(--ease-out);
 	}
 

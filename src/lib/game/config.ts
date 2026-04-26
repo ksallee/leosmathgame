@@ -1,7 +1,13 @@
 export const WIN_CORRECT = 10;
-export const MONSTER_SPEED_PER_SECOND = 0.014;
+/** Kept for type compatibility — now multiplied by 0 in tick() so the monster
+ *  never advances on a clock. Visible time pressure contradicts the brief
+ *  (Beilock — anxiety reduces working-memory bandwidth in math). All monster
+ *  motion is now answer-driven. */
+export const MONSTER_SPEED_PER_SECOND = 0;
 export const PUSH_BACK_PER_CORRECT = 0.1;
-export const WRONG_PENALTY = 0.05;
+/** 5 wrongs in a row = lose (5 × 0.20 = 1.0). Asymmetric vs PUSH_BACK so a
+ *  single correct doesn't fully undo a prior wrong — accumulated bad sticks. */
+export const WRONG_PENALTY = 0.2;
 export const MONSTER_START_POS = 0;
 export const MONSTER_REACHED_POS = 1;
 

@@ -75,12 +75,12 @@ describe('session basics', () => {
 		expect(s.correct).toBe(WIN_CORRECT);
 	});
 
-	it('lose when monster reaches position 1 via tick', () => {
+	it('lose when accumulated wrongs push monster to position 1', () => {
 		const s = createSession(makeProvider(), 1, {}, 0);
-		s.monsterPos = MONSTER_REACHED_POS - 0.01;
-		const changed = tick(s, 10_000);
-		expect(changed).toBe(true);
+		// 5 wrong answers in a row — each adds WRONG_PENALTY (0.20).
+		for (let i = 0; i < 5; i++) answer(s, 999, i * 1000);
 		expect(s.outcome).toBe('lost');
+		expect(s.monsterPos).toBeGreaterThanOrEqual(MONSTER_REACHED_POS);
 	});
 
 	it('no answer accepted after game ends', () => {
@@ -90,11 +90,12 @@ describe('session basics', () => {
 		expect(answer(s, 2, 1000)).toBeNull();
 	});
 
-	it('tick advances proportional to elapsed time', () => {
+	it('tick does NOT advance the monster on its own (no time pressure)', () => {
 		const s = createSession(makeProvider(), 1, {}, 0);
 		tick(s, 5000);
-		expect(s.monsterPos).toBeGreaterThan(0);
-		expect(s.monsterPos).toBeLessThan(0.2);
+		tick(s, 60_000);
+		expect(s.monsterPos).toBe(0);
+		expect(s.outcome).toBe('in_progress');
 	});
 
 	it('summarize reports outcome, totals, avg time', () => {
