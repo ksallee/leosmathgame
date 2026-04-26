@@ -49,6 +49,9 @@
 	let lastEarnedCoins = $state(0);
 	let lastBonusCoins = $state(0);
 	let groupsTakenIds: string[] = $state([]);
+	let projectiles: { id: number; targetPos: number }[] = $state([]);
+	let projNonce = 0;
+	let attackOverlay: { nonce: number } | null = $state(null);
 	let celebrationPhase: 'none' | 'celebrating' | 'overlay' = $state('none');
 	let celebrationTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -109,7 +112,11 @@
 		if (!session) return 'run';
 		if (session.outcome === 'won') return 'hit';
 		if (session.outcome === 'lost') return 'idle';
-		if (session.lastFeedback === 'correct' && now - session.lastFeedbackAt < 450) return 'hit';
+		if (session.lastFeedback === 'correct') {
+			const delay = heroChar.attack ? 550 : 0;
+			const elapsed = now - session.lastFeedbackAt;
+			if (elapsed >= delay && elapsed < delay + 450) return 'hit';
+		}
 		return 'run';
 	});
 
@@ -139,6 +146,7 @@
 	onMount(async () => {
 		const saved = await loadProfile();
 		if (saved) profile = saved;
+		profile.lastViewedLevel = playLevel;
 		loaded = true;
 		startLevel();
 		loop();
@@ -182,7 +190,9 @@
 		groupsTakenIds = [];
 		session = createSession(nextQuestion, playLevel, {
 			speedMultiplier: config.monsterSpeedMultiplier,
-			pushBackMultiplier: config.pushBackMultiplier
+			pushBackMultiplier: config.pushBackMultiplier,
+			// Captain's sword takes ~550ms to arrive — delay push-back to match impact
+			pushBackDelayMs: heroChar.attack ? 550 : 0
 		});
 		userAnswer = '';
 		lastEarnedCoins = 0;
@@ -194,6 +204,7 @@
 		if (session && session.outcome === 'in_progress') {
 			const before = session.outcome;
 			tick(session, now);
+			// Coins disappear when the monster runs over them (centers align for now).
 			for (const g of config.coinGroups) {
 				if (!groupsTakenIds.includes(g.id) && session.monsterPos >= g.x) {
 					groupsTakenIds = [...groupsTakenIds, g.id];
@@ -236,17 +247,25 @@
 		recordForLeitner(profile.mastery, ev);
 		play(ev.correct ? 'correct' : 'wrong', 0.5);
 
+		// Captain throws sword: hero plays attack overlay + spawn projectile
+		if (ev.correct && heroChar.attack && session) {
+			projNonce += 1;
+			projectiles = [...projectiles, { id: projNonce, targetPos: session.monsterPos }];
+			attackOverlay = { nonce: projNonce };
+		}
+
 		if (session.outcome === 'won') {
 			const stars = starsForOutcome(session.wrong);
 			upsertLevelRecord(profile, playLevel, profile.mastery, stars);
-			if (!isReplay) {
-				const base = 10 + session.correct + stars * 5;
-				const bonus = collectedValue;
-				profile.coins += base + bonus;
-				lastEarnedCoins = base;
-				lastBonusCoins = bonus;
-				if (playLevel >= profile.level) profile.level = playLevel + 1;
+			const base = isReplay ? 0 : 15;
+			const bonus = collectedValue;
+			profile.coins += base + bonus;
+			lastEarnedCoins = base;
+			lastBonusCoins = bonus;
+			if (!isReplay && playLevel >= profile.level) {
+				profile.level = playLevel + 1;
 			}
+			profile.lastViewedLevel = playLevel;
 			play('win');
 			void saveProfile(profile);
 		} else if (session.outcome === 'lost') {
@@ -323,6 +342,40 @@
 		</div>
 	{/if}
 
+	<!-- Sky props (clouds) — atmospheric -->
+	{#each config.props.filter((p) => p.type === 'cloud') as cloud (cloud.id)}
+		<img
+			class="cloud-prop"
+			src="/sprites/decor/cloud_{['a', 'b', 'c'][cloud.variant % 3]}.png"
+			alt=""
+			draggable="false"
+			style:left="{cloud.x * 100}%"
+			style:top="{cloud.y * 100}%"
+			style:transform="translate(-50%, 0) scale({cloud.scale})"
+		/>
+	{/each}
+
+	<!-- Hazy background props layer (behind characters) -->
+	<div class="bg-props">
+		{#each config.props.filter((p) => !p.obstacle && p.type !== 'cloud') as prop (prop.id)}
+			<div
+				class="bg-prop"
+				style:left="calc({coinAnchor}px + {prop.x} * (100% - {coinPathPx}px))"
+				style:transform="translate(-50%, 0) scale({prop.scale})"
+			>
+				{#if prop.type === 'palm'}
+					<img
+						src="/sprites/decor/palm_top_{['a', 'b', 'c', 'd'][prop.variant % 4]}.png"
+						alt=""
+						draggable="false"
+					/>
+				{:else if prop.type === 'box'}
+					<img src="/sprites/decor/box{(prop.variant % 3) + 1}.png" alt="" draggable="false" />
+				{/if}
+			</div>
+		{/each}
+	</div>
+
 	<!-- Battle track -->
 	<div class="track">
 		{#each config.coinGroups as g (g.id)}
@@ -352,8 +405,31 @@
 			<Sprite character={monsterChar} state={monsterState} height={monsterHeight} flip />
 		</div>
 		<div class="hero-wrap" style:right="{HERO_EDGE}px" style:width="{heroW}px">
-			<Sprite character={heroChar} state={heroState} height={heroHeight} flip />
+			<div class="hero-base" class:hidden={!!(attackOverlay && heroChar.attack)}>
+				<Sprite character={heroChar} state={heroState} height={heroHeight} flip />
+			</div>
+			{#if attackOverlay && heroChar.attack}
+				{#key attackOverlay.nonce}
+					<div class="attack-overlay" onanimationend={() => (attackOverlay = null)}>
+						<Sprite character={heroChar} state="attack" height={heroHeight} flip />
+					</div>
+				{/key}
+			{/if}
 		</div>
+
+		<!-- Sword projectiles (Captain only) -->
+		{#each projectiles as p (p.id)}
+			<div
+				class="projectile"
+				style:--start-x="calc(100% - {HERO_EDGE + heroW / 2}px)"
+				style:--end-x="calc({MONSTER_EDGE + monsterW / 2}px + {p.targetPos} * (100% - {coinPathPx}px))"
+				onanimationend={(e) => {
+					if ((e.target as HTMLElement).classList.contains('projectile')) {
+						projectiles = projectiles.filter((x) => x.id !== p.id);
+					}
+				}}
+			></div>
+		{/each}
 	</div>
 
 	<!-- Numpad floater -->
@@ -469,20 +545,22 @@
 		background: linear-gradient(
 			180deg,
 			color-mix(in srgb, var(--tint) 60%, transparent) 0%,
-			var(--tint) 30%,
+			var(--tint) 25%,
 			color-mix(in srgb, var(--tint) 70%, black) 100%
 		);
-		z-index: 1;
+		z-index: 2;
 		box-shadow: inset 0 8px 16px rgba(0, 0, 0, 0.35);
+		pointer-events: none;
 	}
 	.ground-edge {
 		position: absolute;
 		left: 0;
 		right: 0;
 		bottom: var(--ground-h);
-		height: 6px;
-		background: linear-gradient(180deg, rgba(255, 255, 255, 0.18), transparent);
-		z-index: 2;
+		height: 8px;
+		background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), transparent);
+		z-index: 12;
+		pointer-events: none;
 	}
 
 	/* ---- HUD ---- */
@@ -660,7 +738,7 @@
 		right: 0;
 		bottom: var(--ground-h);
 		height: 220px;
-		z-index: 10;
+		z-index: 11;
 		pointer-events: none;
 	}
 	.monster-wrap {
@@ -669,8 +747,101 @@
 		display: flex;
 		align-items: flex-end;
 		justify-content: center;
-		transition: left var(--motion-normal) var(--ease-out);
+		transition: left 0.5s cubic-bezier(0.4, 0, 0.6, 1);
 		will-change: left;
+	}
+	/* Sword projectile (Captain throws) — pixel-art spinning sword */
+	.projectile {
+		position: absolute;
+		bottom: 110px;
+		left: var(--start-x);
+		width: 80px;
+		height: 80px;
+		margin-left: -40px;
+		background-image: url('/sprites/decor/sword_spin.png');
+		background-size: 320px 80px;
+		background-repeat: no-repeat;
+		background-position: 0 0;
+		image-rendering: pixelated;
+		image-rendering: crisp-edges;
+		filter: drop-shadow(0 0 10px rgba(252, 211, 77, 0.9)) drop-shadow(0 4px 6px rgba(0, 0, 0, 0.6));
+		z-index: 13;
+		pointer-events: none;
+		animation:
+			throw-fly 0.55s ease-out forwards,
+			sword-spin 0.13s steps(4) infinite;
+	}
+	@keyframes throw-fly {
+		0% {
+			left: var(--start-x);
+			transform: translateY(0);
+			opacity: 1;
+		}
+		90% {
+			opacity: 1;
+		}
+		100% {
+			left: var(--end-x);
+			transform: translateY(-10px);
+			opacity: 0;
+		}
+	}
+	@keyframes sword-spin {
+		from {
+			background-position-x: 0;
+		}
+		to {
+			background-position-x: -320px;
+		}
+	}
+	/* ---- Scene props ---- */
+	.cloud-prop {
+		position: absolute;
+		image-rendering: pixelated;
+		image-rendering: crisp-edges;
+		opacity: 0.6;
+		pointer-events: none;
+		filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.3));
+		z-index: 3;
+		width: clamp(180px, 18vw, 280px);
+		height: auto;
+		animation: cloud-drift 40s linear infinite;
+	}
+	@keyframes cloud-drift {
+		0% {
+			transform: translate(-50%, 0) translateX(0);
+		}
+		50% {
+			transform: translate(-50%, 0) translateX(40px);
+		}
+		100% {
+			transform: translate(-50%, 0) translateX(0);
+		}
+	}
+	/* Hazy background prop layer — behind characters, sitting ON the ground */
+	.bg-props {
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: var(--ground-h);
+		height: 240px;
+		z-index: 11;
+		pointer-events: none;
+	}
+	.bg-prop {
+		position: absolute;
+		bottom: 0;
+		display: flex;
+		align-items: flex-end;
+		justify-content: center;
+	}
+	.bg-prop img {
+		image-rendering: pixelated;
+		image-rendering: crisp-edges;
+		height: clamp(120px, 16vh, 180px);
+		width: auto;
+		opacity: 0.78;
+		filter: saturate(0.92) brightness(0.94) drop-shadow(0 6px 10px rgba(0, 0, 0, 0.4));
 	}
 	.hero-wrap {
 		position: absolute;
@@ -678,6 +849,17 @@
 		display: flex;
 		align-items: flex-end;
 		justify-content: center;
+	}
+	.hero-base.hidden {
+		visibility: hidden;
+	}
+	.attack-overlay {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: flex-end;
+		justify-content: center;
+		pointer-events: none;
 	}
 	.coin-group {
 		position: absolute;

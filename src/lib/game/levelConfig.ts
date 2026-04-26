@@ -1,7 +1,7 @@
 import type { SeededRng } from '$lib/engine/types';
 import { makeRng } from '$lib/engine/rng';
 
-export type WorldTheme = 'forest' | 'desert' | 'cave' | 'snow' | 'jungle' | 'pirate' | 'lava';
+export type WorldTheme = 'forest' | 'desert' | 'cave' | 'snow' | 'pirate';
 
 export type CoinVariant = 'silver' | 'gold' | 'diamond';
 
@@ -19,6 +19,18 @@ export interface CoinGroup {
 	totalValue: number;
 }
 
+export type PropType = 'box' | 'spikes' | 'palm' | 'cloud';
+
+export interface SceneProp {
+	id: string;
+	type: PropType;
+	x: number;
+	y: number;
+	variant: number;
+	obstacle: boolean;
+	scale: number;
+}
+
 export type ModifierKind = 'normal' | 'fast' | 'treasure' | 'big' | 'frenzy';
 
 export interface LevelConfig {
@@ -28,39 +40,69 @@ export interface LevelConfig {
 	worldTheme: WorldTheme;
 	bgColor: 'blue' | 'brown' | 'gray' | 'green' | 'pink' | 'purple' | 'yellow';
 	groundTint: string;
+	skyTint: string;
 	monsterScale: number;
 	monsterSpeedMultiplier: number;
 	pushBackMultiplier: number;
 	coinGroups: CoinGroup[];
+	props: SceneProp[];
 	modifier: ModifierKind;
 	modifierLabel?: string;
 }
 
-const WORLD_THEMES: WorldTheme[] = ['forest', 'desert', 'cave', 'snow', 'jungle', 'pirate', 'lava'];
+// Worlds change every 10 levels.
+export const LEVELS_PER_WORLD = 10;
+
+const WORLD_THEMES: WorldTheme[] = ['forest', 'desert', 'cave', 'snow', 'pirate'];
 
 const THEME_BG: Record<WorldTheme, LevelConfig['bgColor']> = {
 	forest: 'green',
 	desert: 'yellow',
 	cave: 'purple',
 	snow: 'gray',
-	jungle: 'brown',
-	pirate: 'blue',
-	lava: 'pink'
+	pirate: 'blue'
 };
 
 const THEME_GROUND: Record<WorldTheme, string> = {
 	forest: '#3f6212',
-	desert: '#a16207',
+	desert: '#b45309',
 	cave: '#3b1d6b',
-	snow: '#475569',
-	jungle: '#5b3a1f',
-	pirate: '#1e3a5f',
-	lava: '#7f1d1d'
+	snow: '#64748b',
+	pirate: '#1e3a5f'
 };
 
+const THEME_SKY: Record<WorldTheme, string> = {
+	forest: '#1e3a23',
+	desert: '#7c2d12',
+	cave: '#1e1b4b',
+	snow: '#1e293b',
+	pirate: '#0c4a6e'
+};
+
+/** Decorative props that sit hazy in the background. */
+const THEME_DECOR: Record<WorldTheme, PropType[]> = {
+	forest: ['palm', 'palm'],
+	desert: ['box'],
+	cave: ['box'],
+	snow: ['box'],
+	pirate: ['palm', 'palm']
+};
+
+/** Foreground obstacles. Currently disabled — kept for future mechanic revival. */
+const THEME_OBSTACLES: Record<WorldTheme, PropType[]> = {
+	forest: [],
+	desert: [],
+	cave: [],
+	snow: [],
+	pirate: []
+};
+
+export function worldIndexFor(level: number): number {
+	return Math.floor((level - 1) / LEVELS_PER_WORLD);
+}
+
 export function worldThemeFor(level: number): WorldTheme {
-	const worldIndex = Math.floor((level - 1) / 5);
-	return WORLD_THEMES[worldIndex % WORLD_THEMES.length];
+	return WORLD_THEMES[worldIndexFor(level) % WORLD_THEMES.length];
 }
 
 function modifierFor(level: number, isBoss: boolean): { kind: ModifierKind; label?: string } {
@@ -73,7 +115,7 @@ function modifierFor(level: number, isBoss: boolean): { kind: ModifierKind; labe
 
 export function levelConfig(level: number): LevelConfig {
 	const rng = makeRng(level * 73 + 19);
-	const worldIndex = Math.floor((level - 1) / 5);
+	const worldIndex = worldIndexFor(level);
 	const worldTheme = WORLD_THEMES[worldIndex % WORLD_THEMES.length];
 	const isBoss = level % 5 === 0;
 	const mod = modifierFor(level, isBoss);
@@ -97,6 +139,7 @@ export function levelConfig(level: number): LevelConfig {
 	}
 
 	const coinGroups = buildCoinGroups(level, isBoss, mod.kind, rng);
+	const props = buildProps(worldTheme, rng);
 
 	return {
 		level,
@@ -105,13 +148,57 @@ export function levelConfig(level: number): LevelConfig {
 		worldTheme,
 		bgColor: THEME_BG[worldTheme],
 		groundTint: THEME_GROUND[worldTheme],
+		skyTint: THEME_SKY[worldTheme],
 		monsterScale,
 		monsterSpeedMultiplier,
 		pushBackMultiplier,
 		coinGroups,
+		props,
 		modifier: mod.kind,
 		modifierLabel: mod.label
 	};
+}
+
+function buildProps(theme: WorldTheme, rng: SeededRng): SceneProp[] {
+	const out: SceneProp[] = [];
+	const decorPool = THEME_DECOR[theme];
+	const obstaclePool = THEME_OBSTACLES[theme];
+
+	// 2 background decorations (palms / fire / box) — one on each edge
+	const bgCount = 2;
+	for (let i = 0; i < bgCount; i++) {
+		const type = rng.pick(decorPool);
+		const onLeft = i % 2 === 0;
+		const x = onLeft ? 0.02 + rng.next() * 0.08 : 0.86 + rng.next() * 0.1;
+		out.push({
+			id: `bg${i}`,
+			type,
+			x,
+			y: 0,
+			variant: rng.int(0, 3),
+			obstacle: false,
+			scale: 0.95 + rng.next() * 0.3
+		});
+	}
+
+	// Foreground obstacles disabled for now (mechanic shelved).
+	void obstaclePool;
+
+	// Clouds: cave has very few (dark), others have several
+	const cloudCount = theme === 'cave' ? (rng.chance(0.3) ? 1 : 0) : rng.int(2, 4);
+	for (let i = 0; i < cloudCount; i++) {
+		out.push({
+			id: `c${i}`,
+			type: 'cloud',
+			x: rng.next(),
+			y: 0.08 + rng.next() * 0.32,
+			variant: rng.int(0, 2),
+			obstacle: false,
+			scale: 0.7 + rng.next() * 0.6
+		});
+	}
+
+	return out;
 }
 
 function makePiece(variant: CoinVariant, dx: number, dy: number): CoinPiece {

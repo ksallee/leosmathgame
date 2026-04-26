@@ -6,6 +6,9 @@ export interface SpriteState {
 	/** Total animation cycle duration in ms (e.g. 12 frames * 80ms = 960). */
 	durationMs: number;
 	loop: boolean;
+	/** Pixels of transparent space at the bottom of each frame (native source units).
+	 *  When set, the Sprite clips that band so the character's feet sit at the wrap bottom. */
+	bottomPad?: number;
 }
 
 export interface CharacterManifest {
@@ -14,6 +17,7 @@ export interface CharacterManifest {
 	idle: SpriteState;
 	run: SpriteState;
 	hit: SpriteState;
+	attack?: SpriteState;
 }
 
 const FRAME_MS = 80;
@@ -43,7 +47,15 @@ export const HEROES: Record<string, CharacterManifest> = {
 	pink_man: hero('pink_man'),
 	ninja_frog: hero('ninja_frog'),
 	virtual_guy: hero('virtual_guy'),
-	mask_dude: hero('mask_dude')
+	mask_dude: hero('mask_dude'),
+	captain: {
+		id: 'captain',
+		name: 'captain',
+		idle: { ...state('/sprites/heroes/captain/idle.png', 64, 40, 5), bottomPad: 8 },
+		run: { ...state('/sprites/heroes/captain/run.png', 64, 40, 6), bottomPad: 8 },
+		hit: { ...state('/sprites/heroes/captain/hit.png', 64, 40, 4, false), bottomPad: 8 },
+		attack: { ...state('/sprites/heroes/captain/attack.png', 64, 40, 3, false), bottomPad: 8 }
+	}
 };
 
 // ---- Monsters ---- (PA2, varying dimensions)

@@ -17,6 +17,7 @@ export interface Inventory {
 export interface Profile {
 	mastery: MasteryState;
 	level: number;
+	lastViewedLevel: number;
 	coins: number;
 	inventory: Inventory;
 	levelRecords: LevelRecord[];
@@ -26,6 +27,7 @@ export function emptyProfile(): Profile {
 	return {
 		mastery: createState(),
 		level: 1,
+		lastViewedLevel: 1,
 		coins: 0,
 		inventory: {
 			owned: [DEFAULT_HERO_ID],
@@ -40,6 +42,7 @@ function migrate(p: Partial<Profile>): Profile {
 	return {
 		mastery: p.mastery ?? empty.mastery,
 		level: p.level ?? empty.level,
+		lastViewedLevel: p.lastViewedLevel ?? p.level ?? empty.lastViewedLevel,
 		coins: p.coins ?? empty.coins,
 		inventory: p.inventory ?? empty.inventory,
 		levelRecords: p.levelRecords ?? empty.levelRecords

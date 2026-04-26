@@ -29,7 +29,6 @@
 		onMap
 	}: Props = $props();
 
-	const totalReward = $derived(earnedCoins + bonusCoins);
 	const won = $derived(outcome === 'won');
 </script>
 
@@ -58,42 +57,33 @@
 				<span class="key">Mauvaises</span>
 				<span class="val bad">{wrong}</span>
 			</div>
-			<div class="line">
-				<span class="key">Trésors</span>
-				<span class="val">🪙 {coinsCollected} / {coinsTotal}</span>
-			</div>
 			{#if won && earnedCoins > 0}
-				<div class="line">
+				<div class="line big">
 					<span class="key">Récompense</span>
 					<span class="val gold">+{earnedCoins} 🪙</span>
 				</div>
 			{/if}
 			{#if won && bonusCoins > 0}
-				<div class="line">
-					<span class="key">Bonus trésor</span>
+				<div class="line big">
+					<span class="key">Trésors ({coinsCollected}/{coinsTotal})</span>
 					<span class="val gold">+{bonusCoins} 🪙</span>
 				</div>
 			{/if}
-			{#if won && totalReward > 0}
-				<div class="line big">
-					<span class="key">Total</span>
-					<span class="val gold">+{totalReward} 🪙</span>
-				</div>
-			{/if}
 			{#if won && isReplay}
-				<div class="replay-note">Rejouée — pas de pièces</div>
+				<div class="replay-note">Rejouée — récompense seulement sur trésors</div>
 			{/if}
 		</div>
 
 		<div class="actions">
-			<button class="wood-btn primary" onclick={onNext}>
-				{#if won}
-					{isReplay ? 'Carte' : 'Suivant ▶'}
-				{:else}
-					Réessayer
-				{/if}
-			</button>
-			<button class="wood-btn" onclick={onMap}>Carte des niveaux</button>
+			{#if won && isReplay}
+				<button class="wood-btn primary" onclick={onMap}>Carte des niveaux</button>
+			{:else if won}
+				<button class="wood-btn primary" onclick={onNext}>Suivant ▶</button>
+				<button class="wood-btn" onclick={onMap}>Carte des niveaux</button>
+			{:else}
+				<button class="wood-btn primary" onclick={onNext}>Réessayer</button>
+				<button class="wood-btn" onclick={onMap}>Carte des niveaux</button>
+			{/if}
 		</div>
 	</div>
 </div>

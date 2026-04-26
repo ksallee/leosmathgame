@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { CharacterManifest } from '$lib/sprites/manifest';
 
-	type StateKey = 'idle' | 'run' | 'hit';
+	type StateKey = 'idle' | 'run' | 'hit' | 'attack';
 
 	interface Props {
 		character: CharacterManifest;
@@ -12,15 +12,17 @@
 
 	let { character, state = 'idle', height = 128, flip = false }: Props = $props();
 
-	const current = $derived(character[state]);
-	const scale = $derived(height / current.frameH);
+	const current = $derived(character[state] ?? character.idle);
+	const bodyH = $derived(current.frameH - (current.bottomPad ?? 0));
+	const scale = $derived(height / bodyH);
 	const w = $derived(current.frameW * scale);
 	const h = $derived(current.frameH * scale);
+	const visibleH = $derived(bodyH * scale);
 	const totalW = $derived(w * current.frames);
 </script>
 
 {#key character.id + state}
-	<div class="wrap" style:width="{w}px" style:height="{h}px">
+	<div class="wrap" style:width="{w}px" style:height="{visibleH}px">
 		<div
 			class="sprite"
 			class:flip

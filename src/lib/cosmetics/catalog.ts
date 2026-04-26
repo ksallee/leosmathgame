@@ -4,7 +4,8 @@ export const HERO_SKINS: SpriteSkin[] = [
 	{ id: 'pink_man', name: 'Rose', slot: 'hero', price: 0 },
 	{ id: 'ninja_frog', name: 'Ninja Grenouille', slot: 'hero', price: 80 },
 	{ id: 'mask_dude', name: 'Masque', slot: 'hero', price: 120 },
-	{ id: 'virtual_guy', name: 'Virtuel', slot: 'hero', price: 200, unlockLevel: 5 }
+	{ id: 'virtual_guy', name: 'Virtuel', slot: 'hero', price: 200, unlockLevel: 5 },
+	{ id: 'captain', name: 'Capitaine ⚔', slot: 'hero', price: 300, unlockLevel: 11 }
 ];
 
 export const MONSTER_SKINS: SpriteSkin[] = [

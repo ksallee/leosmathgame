@@ -1,49 +1,129 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { goto } from '$app/navigation';
-	import { loadProfile, emptyProfile, findLevelRecord, type Profile } from '$lib/storage/persist';
+	import { goto, beforeNavigate } from '$app/navigation';
+	import {
+		loadProfile,
+		saveProfile,
+		emptyProfile,
+		findLevelRecord,
+		type Profile
+	} from '$lib/storage/persist';
 	import { pickMonsterForLevel, DEFAULT_HERO_ID } from '$lib/cosmetics/catalog';
 	import { HEROES, MONSTERS } from '$lib/sprites/manifest';
+	import { worldThemeFor, LEVELS_PER_WORLD, type WorldTheme } from '$lib/game/levelConfig';
 	import Sprite from '$lib/components/sprites/Sprite.svelte';
 
 	let profile: Profile = $state(emptyProfile());
+	let loaded = $state(false);
 	let scroller: HTMLDivElement | undefined = $state();
 
-	const SHOW_AHEAD = 10;
 	const NODE_GAP = 150;
-	const TOP_PAD = 60;
+	const TOP_PAD = 100;
 
-	const totalLevels = $derived(Math.max(profile.level + SHOW_AHEAD, 25));
+	// Visible levels grow in chunks of 10 — beating level 10 unlocks 11-20, etc.
+	const totalLevels = $derived(Math.max(10, Math.ceil(profile.level / 10) * 10));
 	const heroChar = $derived(HEROES[profile.inventory.equipped.hero] ?? HEROES[DEFAULT_HERO_ID]);
+
+	const WORLD_GRADIENTS: Record<WorldTheme, string> = {
+		forest:
+			'linear-gradient(180deg, #14532d 0%, #166534 50%, #15803d 100%), radial-gradient(ellipse at 70% 0%, #4ade80, transparent)',
+		desert:
+			'linear-gradient(180deg, #7c2d12 0%, #9a3412 50%, #c2410c 100%), radial-gradient(ellipse at 30% 0%, #fbbf24, transparent)',
+		cave: 'linear-gradient(180deg, #1e1b4b 0%, #312e81 50%, #4338ca 100%)',
+		snow: 'linear-gradient(180deg, #1e293b 0%, #334155 50%, #64748b 100%)',
+		pirate: 'linear-gradient(180deg, #0c4a6e 0%, #075985 50%, #0369a1 100%)'
+	};
+	const WORLD_LABEL: Record<WorldTheme, string> = {
+		forest: '🌲 Forêt',
+		desert: '🏜 Désert',
+		cave: '🕳 Caverne',
+		snow: '❄ Glace',
+		pirate: '🏴‍☠ Pirate'
+	};
+
+	const worldsVisible = $derived.by(() => {
+		const worlds: { idx: number; theme: WorldTheme; topPx: number; heightPx: number }[] = [];
+		const totalWorlds = Math.ceil(totalLevels / LEVELS_PER_WORLD);
+		for (let w = 0; w < totalWorlds; w++) {
+			const startLevel = w * LEVELS_PER_WORLD + 1;
+			worlds.push({
+				idx: w,
+				theme: worldThemeFor(startLevel),
+				topPx: w * LEVELS_PER_WORLD * NODE_GAP,
+				heightPx: LEVELS_PER_WORLD * NODE_GAP
+			});
+		}
+		return worlds;
+	});
 
 	onMount(async () => {
 		const saved = await loadProfile();
 		if (saved) profile = saved;
+		loaded = true;
 		queueMicrotask(scrollToCurrent);
+	});
+
+	$effect(() => {
+		if (loaded) void saveProfile(profile);
+	});
+
+	beforeNavigate(async () => {
+		if (loaded) await saveProfile(profile);
 	});
 
 	function scrollToCurrent() {
 		if (!scroller) return;
-		const target = (profile.level - 1) * NODE_GAP + TOP_PAD - scroller.clientHeight / 2 + 60;
-		scroller.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
+		const target =
+			(profile.lastViewedLevel - 1) * NODE_GAP + TOP_PAD - scroller.clientHeight / 2 + 60;
+		scroller.scrollTo({ top: Math.max(0, target), behavior: 'auto' });
 	}
 
 	function nodeX(i: number): number {
-		return 50 + Math.sin(i * 0.65) * 30;
+		// 25-75% of viewport (50% wide path centered, with bg edges showing)
+		return 50 + Math.sin(i * 0.65) * 25;
 	}
 
-	type Status = 'locked' | 'current' | 'done';
+	// Bubble vertical center within a node (node top + bubble half-height).
+	const NODE_BUBBLE_Y = 44;
+
+	/** Catmull-Rom smoothing → cubic bezier path for smooth wavy trail.
+	 *  Path Y is offset so it passes through bubble centers. */
+	function smoothPathD(): string {
+		const pts: [number, number][] = Array.from({ length: totalLevels }, (_, i) => [
+			nodeX(i),
+			i * NODE_GAP + TOP_PAD + NODE_BUBBLE_Y
+		]);
+		if (pts.length === 0) return '';
+		let d = `M ${pts[0][0]} ${pts[0][1]}`;
+		for (let i = 0; i < pts.length - 1; i++) {
+			const p0 = pts[Math.max(0, i - 1)];
+			const p1 = pts[i];
+			const p2 = pts[i + 1];
+			const p3 = pts[Math.min(pts.length - 1, i + 2)];
+			const c1x = p1[0] + (p2[0] - p0[0]) / 6;
+			const c1y = p1[1] + (p2[1] - p0[1]) / 6;
+			const c2x = p2[0] - (p3[0] - p1[0]) / 6;
+			const c2y = p2[1] - (p3[1] - p1[1]) / 6;
+			d += ` C ${c1x} ${c1y}, ${c2x} ${c2y}, ${p2[0]} ${p2[1]}`;
+		}
+		return d;
+	}
+
+	type Status = 'undone' | 'current' | 'done';
 	function levelStatus(level: number): Status {
+		if (findLevelRecord(profile, level)) return 'done';
 		if (level === profile.level) return 'current';
-		if (level < profile.level) return 'done';
-		return 'locked';
+		return 'undone'; // unlocked but never beaten (a gap from skipping)
 	}
 
 	function tap(level: number) {
-		const s = levelStatus(level);
-		if (s === 'done') goto(`/play?replay=${level}`);
-		else if (s === 'current') goto('/play');
-		else goto(`/play?level=${level}`);
+		profile.lastViewedLevel = level;
+		if (findLevelRecord(profile, level)) {
+			goto(`/play?replay=${level}`);
+		} else {
+			// 'current' or any 'undone' level (gap) — play it normally.
+			goto(level === profile.level ? '/play' : `/play?level=${level}`);
+		}
 	}
 
 	function backHome() {
@@ -51,29 +131,79 @@
 	}
 </script>
 
-<main>
-	<header>
-		<button class="back" onclick={backHome} aria-label="Retour">←</button>
-		<h1>Carte des niveaux</h1>
-		<a class="shop" href="/shop">🪙 {profile.coins}</a>
-	</header>
+<main class="game">
+	<!-- Floating HUD -->
+	<div class="hud-top">
+		<button class="chip back" onclick={backHome} aria-label="Retour">←</button>
+		<div class="chip title">Carte des niveaux</div>
+		<a class="chip coins" href="/shop">🪙 {profile.coins}</a>
+	</div>
 
 	<div class="scroller" bind:this={scroller}>
-		<div class="map" style="height: {totalLevels * NODE_GAP + TOP_PAD}px">
+		<div class="map" style="height: {totalLevels * NODE_GAP + TOP_PAD * 2}px">
+			<!-- World background sections -->
+			{#each worldsVisible as w (w.idx)}
+				<div
+					class="world-section"
+					style:top="{w.topPx}px"
+					style:height="{w.heightPx}px"
+					style:background={WORLD_GRADIENTS[w.theme]}
+					style:--theme-shadow="rgba(0,0,0,0.4)"
+				>
+					<div class="world-label">
+						<span>{WORLD_LABEL[w.theme]}</span>
+						<span class="world-num">Monde {w.idx + 1}</span>
+					</div>
+					<!-- Decorative props per world theme -->
+					{#if w.theme === 'pirate' || w.theme === 'forest'}
+						<img
+							class="decor palm-l"
+							src="/sprites/decor/palm_top_a.png"
+							alt=""
+							draggable="false"
+						/>
+						<img
+							class="decor palm-r"
+							src="/sprites/decor/palm_top_c.png"
+							alt=""
+							draggable="false"
+						/>
+						<img
+							class="decor palm-mid"
+							src="/sprites/decor/palm_top_b.png"
+							alt=""
+							draggable="false"
+						/>
+					{/if}
+					{#if w.theme === 'desert'}
+						<img class="decor palm-l" src="/sprites/decor/box1.png" alt="" draggable="false" />
+						<img class="decor palm-r" src="/sprites/decor/box2.png" alt="" draggable="false" />
+					{/if}
+					{#if w.theme === 'cave'}
+						<img class="decor palm-l" src="/sprites/decor/box3.png" alt="" draggable="false" />
+						<img class="decor palm-r" src="/sprites/decor/spikes.png" alt="" draggable="false" />
+					{/if}
+					{#if w.theme === 'snow'}
+						<img class="decor palm-l" src="/sprites/decor/box1.png" alt="" draggable="false" />
+						<img class="decor palm-r" src="/sprites/decor/box3.png" alt="" draggable="false" />
+					{/if}
+					<img class="cloud cloud-1" src="/sprites/decor/cloud_a.png" alt="" draggable="false" />
+					<img class="cloud cloud-2" src="/sprites/decor/cloud_b.png" alt="" draggable="false" />
+					<img class="cloud cloud-3" src="/sprites/decor/cloud_c.png" alt="" draggable="false" />
+				</div>
+			{/each}
+
 			<svg
 				class="path"
 				preserveAspectRatio="none"
-				viewBox="0 0 100 {totalLevels * NODE_GAP + TOP_PAD}"
+				viewBox="0 0 100 {totalLevels * NODE_GAP + TOP_PAD * 2}"
 			>
 				<path
-					d={Array.from({ length: totalLevels }, (_, i) => {
-						const x = nodeX(i);
-						const y = i * NODE_GAP + TOP_PAD;
-						return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
-					}).join(' ')}
-					stroke="rgba(255,255,255,0.12)"
-					stroke-width="0.6"
-					stroke-dasharray="2 2"
+					d={smoothPathD()}
+					stroke="rgba(255, 240, 200, 0.55)"
+					stroke-width="3"
+					stroke-dasharray="6 8"
+					stroke-linecap="round"
 					fill="none"
 					vector-effect="non-scaling-stroke"
 				/>
@@ -124,71 +254,164 @@
 </main>
 
 <style>
-	main {
-		display: flex;
-		flex-direction: column;
-		height: 100vh;
-		background:
-			radial-gradient(ellipse at 30% 10%, #1e1b4b 0%, transparent 50%),
-			radial-gradient(ellipse at 70% 90%, #312e81 0%, transparent 60%), var(--surface-app);
+	.game {
+		position: fixed;
+		inset: 0;
+		overflow: hidden;
+		background: #0b0d10;
 	}
 
-	header {
+	/* ---- Floating HUD ---- */
+	.hud-top {
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
 		display: flex;
 		align-items: center;
 		gap: var(--space-3);
 		padding: var(--space-3) var(--space-4);
-		background: rgba(15, 23, 42, 0.85);
-		backdrop-filter: blur(8px);
-		border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-		position: sticky;
-		top: 0;
-		z-index: 10;
+		z-index: 30;
+		pointer-events: none;
 	}
-	.back {
-		font-size: var(--text-2xl);
-		padding: var(--space-2) var(--space-3);
-		border-radius: var(--radius-sm);
-		color: var(--text-muted);
+	.hud-top > * {
+		pointer-events: auto;
 	}
-	h1 {
-		flex: 1;
-		font: var(--font-w-bold) var(--text-lg) / 1 var(--font-display);
-	}
-	.shop {
-		display: flex;
+	.chip {
+		display: inline-flex;
 		align-items: center;
 		gap: var(--space-2);
-		padding: var(--space-2) var(--space-3);
-		background: var(--color-bg-800);
+		padding: var(--space-2) var(--space-4);
+		background: rgba(15, 23, 42, 0.7);
+		backdrop-filter: blur(10px);
 		border-radius: var(--radius-pill);
-		color: var(--color-coin-500);
+		color: var(--color-fg-50);
 		font: var(--font-w-bold) var(--text-base) / 1 var(--font-display);
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+	}
+	.chip.back {
+		font-size: var(--text-xl);
+		padding: var(--space-2) var(--space-3);
+	}
+	.chip.title {
+		flex: 1;
+		justify-content: center;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+	}
+	.chip.coins {
+		color: var(--color-coin-500);
 		font-variant-numeric: tabular-nums;
 	}
-	.shop:active {
-		transform: scale(0.95);
+	.chip:active {
+		transform: scale(0.96);
 	}
 
+	/* ---- Scroller ---- */
 	.scroller {
-		flex: 1;
+		position: absolute;
+		inset: 0;
 		overflow-y: auto;
 		overflow-x: hidden;
 		-webkit-overflow-scrolling: touch;
 	}
 	.map {
 		position: relative;
-		max-width: 540px;
-		margin: 0 auto;
+		width: 100%;
 	}
+
+	/* ---- World sections (background per world) ---- */
+	.world-section {
+		position: absolute;
+		left: 0;
+		right: 0;
+		overflow: hidden;
+		box-shadow: inset 0 -20px 40px rgba(0, 0, 0, 0.4);
+	}
+	.world-label {
+		position: absolute;
+		top: 80px;
+		left: 24px;
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		font: var(--font-w-bold) var(--text-2xl) / 1 var(--font-display);
+		color: rgba(255, 255, 255, 0.9);
+		text-shadow: 0 2px 0 rgba(0, 0, 0, 0.5);
+		z-index: 2;
+	}
+	.world-num {
+		font-size: var(--text-sm);
+		color: rgba(255, 255, 255, 0.6);
+		font-weight: var(--font-w-medium);
+	}
+
+	.decor {
+		position: absolute;
+		image-rendering: pixelated;
+		image-rendering: crisp-edges;
+		filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.55));
+		opacity: 0.9;
+		pointer-events: none;
+	}
+	.palm-l,
+	.cact-l {
+		left: 24px;
+		bottom: 60px;
+		width: 200px;
+		height: auto;
+	}
+	.palm-r,
+	.cact-r {
+		right: 24px;
+		bottom: 60px;
+		width: 200px;
+		height: auto;
+		transform: scaleX(-1);
+	}
+	.palm-mid {
+		left: 50%;
+		bottom: 360px;
+		width: 140px;
+		transform: translateX(-50%) scaleX(-1);
+	}
+	.cloud {
+		position: absolute;
+		image-rendering: pixelated;
+		opacity: 0.55;
+		pointer-events: none;
+		filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.3));
+	}
+	.cloud-1 {
+		top: 12%;
+		right: 4%;
+		width: 220px;
+		height: auto;
+	}
+	.cloud-2 {
+		top: 48%;
+		left: 4%;
+		width: 180px;
+		height: auto;
+	}
+	.cloud-3 {
+		top: 78%;
+		right: 12%;
+		width: 160px;
+		height: auto;
+	}
+
+	/* ---- Path ---- */
 	.path {
 		position: absolute;
 		inset: 0;
 		width: 100%;
 		height: 100%;
 		pointer-events: none;
+		z-index: 1;
 	}
 
+	/* ---- Nodes ---- */
 	.node {
 		position: absolute;
 		transform: translateX(-50%);
@@ -201,17 +424,21 @@
 		padding: 0;
 		background: transparent;
 		border: none;
+		z-index: 5;
 	}
 	.bubble {
 		position: relative;
 		width: 88px;
 		height: 88px;
 		border-radius: 50%;
-		background: linear-gradient(180deg, var(--color-bg-800), var(--color-bg-900));
+		background:
+			radial-gradient(ellipse at top, rgba(255, 255, 255, 0.25), transparent 60%),
+			linear-gradient(180deg, #d9a26b, #8a5524);
 		box-shadow:
-			inset 0 -4px 8px rgba(0, 0, 0, 0.5),
-			inset 0 2px 4px rgba(255, 255, 255, 0.1),
-			0 8px 16px rgba(0, 0, 0, 0.5);
+			inset 0 -6px 12px rgba(0, 0, 0, 0.5),
+			inset 0 4px 6px rgba(255, 230, 180, 0.4),
+			0 0 0 4px #5a3a1a,
+			0 8px 16px rgba(0, 0, 0, 0.6);
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -229,29 +456,34 @@
 	}
 	.num {
 		position: absolute;
-		bottom: -4px;
-		right: -4px;
-		min-width: 28px;
-		height: 28px;
-		padding: 0 6px;
+		bottom: -8px;
+		right: -8px;
+		min-width: 32px;
+		height: 32px;
+		padding: 0 8px;
 		border-radius: var(--radius-pill);
-		background: var(--color-fg-50);
-		color: var(--color-bg-900);
-		font: var(--font-w-bold) var(--text-base) / 28px var(--font-display);
+		background: #fef3c7;
+		color: #4a2c0e;
+		font: var(--font-w-bold) var(--text-base) / 32px var(--font-display);
 		text-align: center;
 		font-variant-numeric: tabular-nums;
-		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+		box-shadow:
+			0 0 0 3px #5a3a1a,
+			0 4px 4px rgba(0, 0, 0, 0.4);
 	}
 	.node.boss .bubble {
-		background: linear-gradient(180deg, #facc15 0%, #b45309 100%);
+		background:
+			radial-gradient(ellipse at top, rgba(255, 255, 255, 0.4), transparent 60%),
+			linear-gradient(180deg, #facc15, #b45309);
 		box-shadow:
-			inset 0 -4px 8px rgba(0, 0, 0, 0.5),
-			inset 0 2px 6px rgba(255, 255, 255, 0.3),
-			0 0 24px rgba(250, 204, 21, 0.5),
-			0 8px 16px rgba(0, 0, 0, 0.5);
+			inset 0 -6px 12px rgba(0, 0, 0, 0.4),
+			inset 0 4px 6px rgba(255, 255, 255, 0.5),
+			0 0 0 4px #78350f,
+			0 0 24px rgba(252, 211, 77, 0.6),
+			0 8px 16px rgba(0, 0, 0, 0.6);
 	}
 	.node.locked .bubble {
-		filter: grayscale(0.85) brightness(0.5);
+		filter: grayscale(0.7) brightness(0.6);
 	}
 	.node.locked .num {
 		opacity: 0.5;
@@ -262,10 +494,11 @@
 	.node.current .bubble {
 		animation: pulse 1.6s ease-in-out infinite;
 		box-shadow:
-			inset 0 -4px 8px rgba(0, 0, 0, 0.5),
-			inset 0 2px 4px rgba(255, 255, 255, 0.1),
+			inset 0 -6px 12px rgba(0, 0, 0, 0.4),
+			inset 0 4px 6px rgba(255, 230, 180, 0.5),
 			0 0 0 4px var(--color-primary-500),
-			0 0 24px rgba(16, 185, 129, 0.6);
+			0 0 28px rgba(16, 185, 129, 0.7),
+			0 8px 16px rgba(0, 0, 0, 0.6);
 	}
 	@keyframes pulse {
 		0%,
@@ -273,38 +506,39 @@
 			transform: scale(1);
 		}
 		50% {
-			transform: scale(1.05);
+			transform: scale(1.06);
 		}
 	}
 	.stars {
 		display: flex;
 		gap: 2px;
 		font-size: var(--text-base);
+		filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.4));
 	}
 	.star {
-		color: var(--color-fg-700);
+		color: rgba(0, 0, 0, 0.4);
 	}
 	.star.on {
-		color: var(--color-coin-500);
-		text-shadow: 0 0 8px rgba(250, 204, 21, 0.7);
+		color: #facc15;
+		text-shadow: 0 0 8px rgba(252, 211, 77, 0.7);
 	}
 	.now {
 		font-size: var(--text-xs);
 		font-weight: var(--font-w-bold);
-		color: var(--color-primary-300);
-		background: rgba(16, 185, 129, 0.15);
+		color: white;
+		background: var(--color-primary-500);
 		padding: 2px 8px;
 		border-radius: var(--radius-pill);
+		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
 	}
 
+	/* ---- Hero marker ---- */
 	.hero-marker {
 		position: absolute;
 		transform: translateX(-50%);
 		pointer-events: none;
 		animation: hero-bob 2s ease-in-out infinite;
-		z-index: 5;
-	}
-	.hero-marker {
+		z-index: 6;
 		filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.6));
 	}
 	@keyframes hero-bob {

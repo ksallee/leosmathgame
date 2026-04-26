@@ -15,6 +15,7 @@ export type QuestionProvider = () => Question;
 export interface SessionOptions {
 	speedMultiplier?: number;
 	pushBackMultiplier?: number;
+	pushBackDelayMs?: number;
 }
 
 export interface SessionState {
@@ -33,6 +34,8 @@ export interface SessionState {
 	lastFeedbackAt: number;
 	speedMultiplier: number;
 	pushBackMultiplier: number;
+	pushBackDelayMs: number;
+	pendingPushBack: { applyAt: number; amount: number } | null;
 }
 
 export function createSession(
@@ -56,7 +59,9 @@ export function createSession(
 		lastFeedback: null,
 		lastFeedbackAt: 0,
 		speedMultiplier: options.speedMultiplier ?? 1,
-		pushBackMultiplier: options.pushBackMultiplier ?? 1
+		pushBackMultiplier: options.pushBackMultiplier ?? 1,
+		pushBackDelayMs: options.pushBackDelayMs ?? 0,
+		pendingPushBack: null
 	};
 }
 
@@ -70,6 +75,7 @@ function clamp(v: number, lo: number, hi: number) {
 }
 
 /** Advance monster based on real-time elapsed since last tick.
+ *  Also applies any pending delayed push-back when its time arrives.
  *  Returns true if outcome changed. */
 export function tick(session: SessionState, now: number = Date.now()): boolean {
 	if (session.outcome !== 'in_progress') return false;
@@ -80,6 +86,14 @@ export function tick(session: SessionState, now: number = Date.now()): boolean {
 		MONSTER_START_POS,
 		MONSTER_REACHED_POS
 	);
+	if (session.pendingPushBack && now >= session.pendingPushBack.applyAt) {
+		session.monsterPos = clamp(
+			session.monsterPos - session.pendingPushBack.amount,
+			MONSTER_START_POS,
+			MONSTER_REACHED_POS
+		);
+		session.pendingPushBack = null;
+	}
 	if (session.monsterPos >= MONSTER_REACHED_POS) {
 		session.outcome = 'lost';
 		return true;
@@ -103,11 +117,16 @@ export function answer(
 
 	if (ev.correct) {
 		session.correct += 1;
-		session.monsterPos = clamp(
-			session.monsterPos - PUSH_BACK_PER_CORRECT * session.pushBackMultiplier,
-			MONSTER_START_POS,
-			MONSTER_REACHED_POS
-		);
+		const pushAmount = PUSH_BACK_PER_CORRECT * session.pushBackMultiplier;
+		if (session.pushBackDelayMs > 0) {
+			session.pendingPushBack = { applyAt: now + session.pushBackDelayMs, amount: pushAmount };
+		} else {
+			session.monsterPos = clamp(
+				session.monsterPos - pushAmount,
+				MONSTER_START_POS,
+				MONSTER_REACHED_POS
+			);
+		}
 		session.lastFeedback = 'correct';
 		session.lastFeedbackAt = now;
 		if (session.correct >= WIN_CORRECT) {
