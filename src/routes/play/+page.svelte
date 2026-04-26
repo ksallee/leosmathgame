@@ -7,9 +7,14 @@
 		recordAnswer,
 		recordForLeitner,
 		opsUnlockedAt,
+		generateChoices,
+		stageForQuestion,
+		evaluateLevelOutcome,
 		type Question,
 		type GenerateOptions,
-		type Operation
+		type Operation,
+		type PresentationStage,
+		type StageTransition
 	} from '$lib/engine';
 	import { opLabel } from '$lib/engine/debug';
 	import {
@@ -28,15 +33,17 @@
 		answer,
 		type SessionState
 	} from '$lib/game/session';
-	import { WIN_CORRECT } from '$lib/game/config';
+	import { WIN_CORRECT, COINS_PER_WIN } from '$lib/game/config';
 	import { levelConfig } from '$lib/game/levelConfig';
 	import { pickMonsterForLevel, DEFAULT_HERO_ID } from '$lib/cosmetics/catalog';
 	import { HEROES, MONSTERS, treasureForVariant } from '$lib/sprites/manifest';
 	import Numpad from '$lib/components/ui/Numpad.svelte';
+	import ChoicePad from '$lib/components/ui/ChoicePad.svelte';
 	import Sprite from '$lib/components/sprites/Sprite.svelte';
 	import Treasure from '$lib/components/sprites/Treasure.svelte';
 	import WorldBg from '$lib/components/sprites/WorldBg.svelte';
 	import OutcomeCard from '$lib/components/game/OutcomeCard.svelte';
+	import ConcreteAid from '$lib/components/game/ConcreteAid.svelte';
 	import { play, unlock } from '$lib/audio/sfx';
 
 	let profile: Profile = $state(emptyProfile());
@@ -56,6 +63,8 @@
 	let celebrationTimer: ReturnType<typeof setTimeout> | null = null;
 
 	let questionBuffer: Question[] = [];
+	let lastTransitions: StageTransition[] = $state([]);
+	let resetting = $state(false);
 
 	const replayLevel = $derived.by(() => {
 		const r = page.url.searchParams.get('replay');
@@ -69,7 +78,11 @@
 	const playLevel = $derived(replayLevel ?? explicitLevel ?? profile.level);
 
 	const replayRecord = $derived(isReplay ? findLevelRecord(profile, playLevel) : undefined);
-	const config = $derived(levelConfig(playLevel));
+	// Pin visuals (monster, world, config, HUD level) to the session's level so
+	// they don't flip to the *next* level mid-celebration when profile.level
+	// increments on win.
+	const visualLevel = $derived<number>((session as SessionState | null)?.level ?? playLevel);
+	const config = $derived(levelConfig(visualLevel));
 
 	function buildOptions(): GenerateOptions | undefined {
 		if (!isReplay) return undefined;
@@ -92,7 +105,7 @@
 	const q = $derived(session ? currentQuestion(session) : null);
 
 	const heroChar = $derived(HEROES[profile.inventory.equipped.hero] ?? HEROES[DEFAULT_HERO_ID]);
-	const monsterSkin = $derived(pickMonsterForLevel(playLevel));
+	const monsterSkin = $derived(pickMonsterForLevel(visualLevel));
 	const monsterChar = $derived(MONSTERS[monsterSkin.id] ?? MONSTERS.slime);
 
 	const monsterHeight = $derived(Math.round(160 * config.monsterScale));
@@ -134,14 +147,35 @@
 		return session.lastFeedback;
 	});
 
+	// Show the correct answer in the prompt for 1.5s after a wrong answer
+	// (R12 — turns every miss into a learning event). The question has already
+	// advanced by then, so we snapshot the missed prompt/answer/op.
+	let lastWrongOp: string | null = $state(null);
+	let lastWrongPrompt: string | null = $state(null);
+	let lastWrongAnswer: number | null = $state(null);
+	let lastWrongAt = $state(0);
+	const REVEAL_MS = 1500;
+	const showingReveal = $derived(lastWrongAnswer !== null && now - lastWrongAt < REVEAL_MS);
+
 	const earnedStars = $derived.by(() => {
 		if (!session || session.outcome !== 'won') return 0;
 		return starsForOutcome(session.wrong);
 	});
 
+	const STAGE_RANK: Record<PresentationStage, number> = {
+		choices_easy: 0,
+		choices_hard: 1,
+		numpad: 2
+	};
+	const levelUpKind: 'band' | 'stage' | null = $derived.by(() => {
+		if (lastTransitions.some((t) => !!t.bandChanged)) return 'band';
+		if (lastTransitions.some((t) => STAGE_RANK[t.to] > STAGE_RANK[t.from])) return 'stage';
+		return null;
+	});
+
 	const collectedGroups = $derived(config.coinGroups.filter((g) => !groupsTakenIds.includes(g.id)));
-	const collectedValue = $derived(collectedGroups.reduce((s, g) => s + g.totalValue, 0));
-	const totalCoinValue = $derived(config.coinGroups.reduce((s, g) => s + g.totalValue, 0));
+	const collectedPieceCount = $derived(collectedGroups.reduce((s, g) => s + g.pieces.length, 0));
+	const totalPieceCount = $derived(config.coinGroups.reduce((s, g) => s + g.pieces.length, 0));
 
 	onMount(async () => {
 		const saved = await loadProfile();
@@ -186,17 +220,50 @@
 	});
 
 	function startLevel() {
+		// Suppress the monster `left` transition for one frame so it snaps to the
+		// start position instead of crawling back from where the previous session
+		// ended.
+		resetting = true;
 		questionBuffer = [];
 		groupsTakenIds = [];
 		session = createSession(nextQuestion, playLevel, {
 			speedMultiplier: config.monsterSpeedMultiplier,
 			pushBackMultiplier: config.pushBackMultiplier,
-			// Captain's sword takes ~550ms to arrive — delay push-back to match impact
 			pushBackDelayMs: heroChar.attack ? 550 : 0
 		});
 		userAnswer = '';
 		lastEarnedCoins = 0;
 		lastBonusCoins = 0;
+		lastTransitions = [];
+		requestAnimationFrame(() => requestAnimationFrame(() => (resetting = false)));
+	}
+
+	// Stage is per-op now (read off the current question's op). The input pad
+	// can switch between numpad and ChoicePad mid-level when the op changes.
+	const currentStage: PresentationStage = $derived(
+		q ? stageForQuestion(profile.mastery, q) : 'choices_easy'
+	);
+	const currentChoices = $derived.by(() => {
+		if (!q || currentStage === 'numpad') return [] as number[];
+		return generateChoices(q.answer, q.id, currentStage === 'choices_hard' ? 'hard' : 'easy');
+	});
+
+	// Concrete-representation aid: dot grid for early multiplication while the
+	// kid is still on choices_easy. Capped at product ≤ 30 so the visual stays
+	// legible (×10 facts, B1 'trivial' band, etc., would explode the grid).
+	const showConcreteAid = $derived(
+		!!q &&
+			q.operation === 'mul' &&
+			currentStage === 'choices_easy' &&
+			q.answer > 0 &&
+			q.answer <= 30 &&
+			q.operands.length === 2
+	);
+
+	function onPick(value: number) {
+		if (!session || session.outcome !== 'in_progress') return;
+		userAnswer = String(value);
+		onSubmit();
 	}
 
 	function loop() {
@@ -241,11 +308,22 @@
 	function onSubmit() {
 		if (!session || !q) return;
 		unlock();
+		const missedOp = opLabel(q.operation);
+		const missedPrompt = q.prompt;
+		const missedAnswer = q.answer;
 		const ev = answer(session, Number(userAnswer));
 		if (!ev) return;
 		recordAnswer(profile.mastery, ev);
 		recordForLeitner(profile.mastery, ev);
 		play(ev.correct ? 'correct' : 'wrong', 0.5);
+		if (!ev.correct) {
+			lastWrongOp = missedOp;
+			lastWrongPrompt = missedPrompt;
+			lastWrongAnswer = missedAnswer;
+			lastWrongAt = Date.now();
+		} else {
+			lastWrongAnswer = null;
+		}
 
 		// Captain throws sword: hero plays attack overlay + spawn projectile
 		if (ev.correct && heroChar.attack && session) {
@@ -254,11 +332,18 @@
 			attackOverlay = { nonce: projNonce };
 		}
 
+		if (session.outcome === 'won' || session.outcome === 'lost') {
+			lastTransitions = evaluateLevelOutcome(profile.mastery, session.events);
+		}
+
 		if (session.outcome === 'won') {
 			const stars = starsForOutcome(session.wrong);
 			upsertLevelRecord(profile, playLevel, profile.mastery, stars);
-			const base = isReplay ? 0 : 15;
-			const bonus = collectedValue;
+			const base = isReplay ? 0 : COINS_PER_WIN;
+			// Compute bonus directly from current state to avoid any derived-staleness.
+			const bonus = config.coinGroups
+				.filter((g) => !groupsTakenIds.includes(g.id))
+				.reduce((s, g) => s + g.totalValue, 0);
 			profile.coins += base + bonus;
 			lastEarnedCoins = base;
 			lastBonusCoins = bonus;
@@ -294,7 +379,7 @@
 <svelte:window on:keydown={onKey} />
 
 <div class="game" class:flash-correct={flash === 'correct'} class:flash-wrong={flash === 'wrong'}>
-	<WorldBg level={playLevel} />
+	<WorldBg level={visualLevel} />
 
 	<div class="ground" style:--tint={config.groundTint}></div>
 	<div class="ground-edge"></div>
@@ -303,7 +388,7 @@
 	<div class="hud-top">
 		<button class="hud-back" onclick={goLevels} aria-label="Carte des niveaux">←</button>
 		<div class="hud-level">
-			<span class="lv-num">Niv. {playLevel}</span>
+			<span class="lv-num">Niv. {visualLevel}</span>
 			{#if config.modifierLabel}
 				<span class="lv-mod" class:mod-boss={config.isBoss}>{config.modifierLabel}</span>
 			{/if}
@@ -329,15 +414,30 @@
 		</div>
 	</div>
 
-	<!-- Question prompt -->
-	{#if q}
+	<!-- Question prompt — during reveal window we freeze on the missed
+	     question and highlight its correct answer in green (R12). -->
+	{#if showingReveal && lastWrongPrompt && lastWrongAnswer !== null}
 		<div class="prompt-area">
+			<div class="prompt-pill reveal">
+				<span class="op-mark">{lastWrongOp}</span>
+				<span class="lhs">{lastWrongPrompt}</span>
+				<span class="eq">=</span>
+				<span class="ans correct">{lastWrongAnswer}</span>
+			</div>
+		</div>
+	{:else if q}
+		<div class="prompt-area">
+			{#if showConcreteAid}
+				<ConcreteAid a={q.operands[0]} b={q.operands[1]} />
+			{/if}
 			<div class="prompt-pill">
 				<span class="op-mark">{opLabel(q.operation)}</span>
 				<span class="lhs">{q.prompt}</span>
 				<span class="eq">=</span>
-				<span class="ans">{userAnswer}</span><span class="caret" class:hide={userAnswer !== ''}
-				></span>
+				<span class="ans">{userAnswer || (currentStage === 'numpad' ? '' : '?')}</span>
+				{#if currentStage === 'numpad'}
+					<span class="caret" class:hide={userAnswer !== ''}></span>
+				{/if}
 			</div>
 		</div>
 	{/if}
@@ -399,6 +499,7 @@
 
 		<div
 			class="monster-wrap"
+			class:no-transition={resetting}
 			style="left: calc({MONSTER_EDGE}px + {session?.monsterPos ?? 0} * (100% - {coinPathPx}px))"
 			style:width="{monsterW}px"
 		>
@@ -432,14 +533,22 @@
 		{/each}
 	</div>
 
-	<!-- Numpad floater -->
+	<!-- Input pad floater (numpad or 4-MCQ depending on per-band stage) -->
 	<div class="pad-floater">
-		<Numpad
-			value={userAnswer}
-			onchange={onChange}
-			onsubmit={onSubmit}
-			disabled={session?.outcome !== 'in_progress'}
-		/>
+		{#if currentStage === 'numpad'}
+			<Numpad
+				value={userAnswer}
+				onchange={onChange}
+				onsubmit={onSubmit}
+				disabled={session?.outcome !== 'in_progress' || showingReveal}
+			/>
+		{:else}
+			<ChoicePad
+				choices={currentChoices}
+				onpick={onPick}
+				disabled={session?.outcome !== 'in_progress' || showingReveal}
+			/>
+		{/if}
 	</div>
 
 	<!-- Win/Lose overlay -->
@@ -457,11 +566,12 @@
 			correct={session.correct}
 			wrong={session.wrong}
 			stars={earnedStars}
-			coinsCollected={collectedValue}
-			coinsTotal={totalCoinValue}
+			coinsCollected={collectedPieceCount}
+			coinsTotal={totalPieceCount}
 			earnedCoins={lastEarnedCoins}
 			bonusCoins={lastBonusCoins}
 			{isReplay}
+			levelUp={levelUpKind}
 			onNext={nextAction}
 			onMap={goLevels}
 		/>
@@ -491,9 +601,6 @@
 	.game.flash-wrong::after {
 		animation: flash-red 0.25s ease-out;
 	}
-	.game.flash-wrong {
-		animation: shake 0.25s ease-in-out;
-	}
 	@keyframes flash-green {
 		0% {
 			background: rgba(34, 197, 94, 0);
@@ -514,24 +621,6 @@
 		}
 		100% {
 			background: rgba(239, 68, 68, 0);
-		}
-	}
-	@keyframes shake {
-		0%,
-		100% {
-			transform: translateX(0);
-		}
-		20% {
-			transform: translateX(-6px);
-		}
-		40% {
-			transform: translateX(6px);
-		}
-		60% {
-			transform: translateX(-4px);
-		}
-		80% {
-			transform: translateX(4px);
 		}
 	}
 
@@ -678,7 +767,10 @@
 		left: 0;
 		right: 0;
 		display: flex;
-		justify-content: center;
+		flex-direction: column;
+		align-items: center;
+		justify-content: flex-start;
+		gap: var(--space-2);
 		z-index: 20;
 		padding: 0 var(--space-4);
 	}
@@ -712,6 +804,27 @@
 	.ans {
 		color: var(--color-primary-300);
 		min-width: 1ch;
+	}
+	.ans.correct {
+		color: #4ade80;
+		text-shadow:
+			0 0 14px rgba(74, 222, 128, 0.7),
+			0 2px 0 rgba(0, 0, 0, 0.6);
+	}
+	.prompt-pill.reveal {
+		border-color: rgba(74, 222, 128, 0.4);
+		animation: reveal-pop 0.35s var(--ease-bounce);
+	}
+	@keyframes reveal-pop {
+		0% {
+			transform: scale(0.96);
+		}
+		60% {
+			transform: scale(1.04);
+		}
+		100% {
+			transform: scale(1);
+		}
 	}
 	.caret {
 		display: inline-block;
@@ -749,6 +862,9 @@
 		justify-content: center;
 		transition: left 0.5s cubic-bezier(0.4, 0, 0.6, 1);
 		will-change: left;
+	}
+	.monster-wrap.no-transition {
+		transition: none;
 	}
 	/* Sword projectile (Captain throws) — pixel-art spinning sword */
 	.projectile {
@@ -863,7 +979,7 @@
 	}
 	.coin-group {
 		position: absolute;
-		bottom: 80px;
+		bottom: 60px;
 		transform: translateX(-50%);
 		animation: coin-bob 2s ease-in-out infinite;
 		z-index: 8;
@@ -910,12 +1026,19 @@
 	.pad-floater :global(.pad) {
 		max-width: 320px;
 	}
+	.pad-floater :global(.choices) {
+		max-width: 640px;
+	}
 	.pad-floater :global(.key) {
 		background: rgba(15, 23, 42, 0.78) !important;
 		backdrop-filter: blur(8px);
 	}
 	.pad-floater :global(.key.ok) {
 		background: var(--color-primary-500) !important;
+	}
+	.pad-floater :global(.choice) {
+		background: rgba(15, 23, 42, 0.78) !important;
+		backdrop-filter: blur(8px);
 	}
 
 	/* ---- Win burst (subtle radial flash, no confetti) ---- */

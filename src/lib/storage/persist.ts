@@ -5,7 +5,13 @@ import { createState } from '$lib/engine';
 import { DEFAULT_HERO_ID } from '$lib/cosmetics/catalog';
 
 const DB_NAME = 'maths_game_7';
-const DB_VERSION = 1;
+// v2: per-op stages refactor + per-fact Leitner keys + wall-clock spacing.
+// Old saves are wiped — pre-v2 profiles had per-band stage maps and template-
+// keyed +/− Leitner cards that would be inconsistent post-migration. Léo
+// hadn't really started yet, so a clean slate is cleaner than a half-migrated
+// save state. If you ever need to migrate (e.g., real users), bump version
+// and add an upgrade path here.
+const DB_VERSION = 2;
 const STORE = 'kv';
 const PROFILE_KEY = 'profile';
 
@@ -39,8 +45,21 @@ export function emptyProfile(): Profile {
 
 function migrate(p: Partial<Profile>): Profile {
 	const empty = emptyProfile();
+	// Defensive backfill: even with DB_VERSION bumps, an open IDB connection
+	// from a prior session can keep the old data alive past a code change.
+	// Always reconcile the saved mastery against the empty shape so missing
+	// required fields (introduced after the save was written) don't crash
+	// downstream readers.
+	const mastery: MasteryState = p.mastery
+		? {
+				...empty.mastery,
+				...p.mastery,
+				fastCorrectStreaks: p.mastery.fastCorrectStreaks ?? {},
+				pendingBridges: p.mastery.pendingBridges ?? []
+			}
+		: empty.mastery;
 	return {
-		mastery: p.mastery ?? empty.mastery,
+		mastery,
 		level: p.level ?? empty.level,
 		lastViewedLevel: p.lastViewedLevel ?? p.level ?? empty.lastViewedLevel,
 		coins: p.coins ?? empty.coins,
@@ -55,7 +74,14 @@ function getDb(): Promise<IDBPDatabase> {
 	if (!browser) throw new Error('IndexedDB only available in browser');
 	if (!dbPromise) {
 		dbPromise = openDB(DB_NAME, DB_VERSION, {
-			upgrade(db) {
+			upgrade(db, oldVersion) {
+				// On any version bump from < 2, wipe the store. The schema
+				// changed in incompatible ways (per-op stages, per-fact Leitner
+				// keys, wall-clock due times) and migration would leave a
+				// half-baked save. Pre-v2 users hadn't really started.
+				if (oldVersion < 2 && db.objectStoreNames.contains(STORE)) {
+					db.deleteObjectStore(STORE);
+				}
 				if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE);
 			}
 		});

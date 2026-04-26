@@ -1,5 +1,17 @@
 <script lang="ts">
-	// Placeholder home — real game UI will replace this.
+	import { clearAll } from '$lib/storage/persist';
+
+	let resetting = $state(false);
+
+	async function resetProfile() {
+		if (resetting) return;
+		const ok = confirm('Effacer toute la progression ? Cette action est irréversible.');
+		if (!ok) return;
+		resetting = true;
+		await clearAll();
+		// Hard reload so any in-memory profile state in /levels or /play is wiped.
+		window.location.href = '/';
+	}
 </script>
 
 <main>
@@ -7,6 +19,9 @@
 	<p>v1 en construction.</p>
 	<a href="/levels" class="cta">Jouer</a>
 	<a href="/debug" class="cta-secondary">Debug</a>
+	<button class="cta-danger" type="button" onclick={resetProfile} disabled={resetting}>
+		{resetting ? 'Effacement…' : 'Réinitialiser le profil'}
+	</button>
 </main>
 
 <style>
@@ -44,5 +59,23 @@
 		padding: var(--space-2) var(--space-4);
 		color: var(--text-muted);
 		font-size: var(--text-sm);
+	}
+	.cta-danger {
+		margin-top: var(--space-6);
+		padding: var(--space-2) var(--space-4);
+		background: transparent;
+		border: 1px solid rgba(239, 68, 68, 0.4);
+		color: rgba(239, 68, 68, 0.85);
+		font-size: var(--text-sm);
+		border-radius: var(--radius-pill);
+		cursor: pointer;
+		transition: background var(--motion-fast) var(--ease-out);
+	}
+	.cta-danger:hover:not(:disabled) {
+		background: rgba(239, 68, 68, 0.1);
+	}
+	.cta-danger:disabled {
+		opacity: 0.5;
+		cursor: wait;
 	}
 </style>

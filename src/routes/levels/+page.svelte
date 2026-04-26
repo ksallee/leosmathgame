@@ -18,7 +18,7 @@
 	let scroller: HTMLDivElement | undefined = $state();
 
 	const NODE_GAP = 150;
-	const TOP_PAD = 100;
+	const TOP_PAD = 180;
 
 	// Visible levels grow in chunks of 10 — beating level 10 unlocks 11-20, etc.
 	const totalLevels = $derived(Math.max(10, Math.ceil(profile.level / 10) * 10));
@@ -44,13 +44,17 @@
 	const worldsVisible = $derived.by(() => {
 		const worlds: { idx: number; theme: WorldTheme; topPx: number; heightPx: number }[] = [];
 		const totalWorlds = Math.ceil(totalLevels / LEVELS_PER_WORLD);
+		const baseH = LEVELS_PER_WORLD * NODE_GAP;
 		for (let w = 0; w < totalWorlds; w++) {
 			const startLevel = w * LEVELS_PER_WORLD + 1;
+			// World 1 absorbs TOP_PAD so node 10 still sits inside it.
+			const topPx = w === 0 ? 0 : TOP_PAD + w * baseH;
+			const heightPx = w === 0 ? baseH + TOP_PAD : baseH;
 			worlds.push({
 				idx: w,
 				theme: worldThemeFor(startLevel),
-				topPx: w * LEVELS_PER_WORLD * NODE_GAP,
-				heightPx: LEVELS_PER_WORLD * NODE_GAP
+				topPx,
+				heightPx
 			});
 		}
 		return worlds;
@@ -136,7 +140,8 @@
 	<div class="hud-top">
 		<button class="chip back" onclick={backHome} aria-label="Retour">←</button>
 		<div class="chip title">Carte des niveaux</div>
-		<a class="chip coins" href="/shop">🪙 {profile.coins}</a>
+		<div class="chip coins"><span aria-hidden="true">🪙</span> {profile.coins}</div>
+		<a class="chip shop" href="/shop" aria-label="Boutique">🛒</a>
 	</div>
 
 	<div class="scroller" bind:this={scroller}>
@@ -302,6 +307,17 @@
 	.chip.coins {
 		color: var(--color-coin-500);
 		font-variant-numeric: tabular-nums;
+	}
+	.chip.shop {
+		font-size: var(--text-xl);
+		padding: var(--space-2) var(--space-3);
+		background: rgba(15, 23, 42, 0.7);
+		box-shadow:
+			inset 0 2px 0 rgba(56, 189, 248, 0.3),
+			inset 0 -3px 0 rgba(0, 0, 0, 0.4),
+			0 0 0 2px rgba(56, 189, 248, 0.5),
+			0 4px 12px rgba(0, 0, 0, 0.5);
+		text-decoration: none;
 	}
 	.chip:active {
 		transform: scale(0.96);

@@ -1,20 +1,36 @@
-import type { MasteryState, Operation, Band, Question, SeededRng, GenerateOptions } from './types';
-import {
-	QUESTIONS_PER_LEVEL,
-	REVIEW_FRACTION,
-	STEADY_AT_BAND_WEIGHT,
-	STEADY_BELOW_BAND_WEIGHT
-} from './config';
+import type {
+	MasteryState,
+	Operation,
+	Band,
+	Question,
+	SeededRng,
+	GenerateOptions,
+	PendingBridge
+} from './types';
+import { QUESTIONS_PER_LEVEL, REVIEW_FRACTION } from './config';
 import { applyUnlocks, getCalibration, nextProbeBand } from './mastery';
 import { dueEntries } from './leitner';
-import { generate, clampBand } from './generators';
+import { generate } from './generators';
 import { makeRng } from './rng';
 
-function pickWeightedBandOffset(rng: SeededRng): -1 | 0 | 1 {
-	const r = rng.next();
-	if (r < STEADY_AT_BAND_WEIGHT) return 0;
-	if (r < STEADY_AT_BAND_WEIGHT + STEADY_BELOW_BAND_WEIGHT) return -1;
-	return 1;
+const SYM: Record<Operation, '+' | '−' | '×' | '÷'> = {
+	add: '+',
+	sub: '−',
+	mul: '×',
+	div: '÷'
+};
+
+function bridgeToQuestion(b: PendingBridge): Question {
+	const sym = SYM[b.op];
+	return {
+		id: `${b.op}:b${b.band}:${b.operands.join(sym)}`,
+		template: `${b.op}:b${b.band}`,
+		operation: b.op,
+		band: b.band,
+		prompt: b.operands.join(` ${sym} `),
+		operands: b.operands.slice(),
+		answer: b.answer
+	};
 }
 
 function calibratingOps(state: MasteryState): Operation[] {
@@ -72,6 +88,23 @@ export function generateLevel(
 			continue;
 		}
 
+		// Drain any pending derived-fact bridges first (R11). One per slot, capped
+		// at ~half the level so they don't crowd out fresh sampling.
+		if (
+			!isReplay &&
+			state.pendingBridges.length > 0 &&
+			i < QUESTIONS_PER_LEVEL / 2 &&
+			useOps.includes(state.pendingBridges[0].op)
+		) {
+			const bridge = state.pendingBridges.shift()!;
+			const bq = bridgeToQuestion(bridge);
+			if (!seen.has(bq.id)) {
+				seen.add(bq.id);
+				out.push(bq);
+				continue;
+			}
+		}
+
 		const due = dueEntries(state).filter((e) => useOps.includes(e.operation));
 		if (due.length > 0 && rng.chance(REVIEW_FRACTION)) {
 			const entry = rng.pick(due);
@@ -79,10 +112,12 @@ export function generateLevel(
 			continue;
 		}
 
+		// Single-band-at-a-time per op: stay at the kid's current band until
+		// numpad consolidation bumps it. Inter-op alternation provides the
+		// discriminative-contrast benefit (Rohrer/Taylor); past-band variety
+		// comes from Leitner reviews above.
 		const op = rrPick(useOps, opCounter++);
-		const baseBand = opts?.bandFor ? opts.bandFor(op) : state[op].band || 1;
-		const offset = pickWeightedBandOffset(rng);
-		const targetBand = clampBand(op, baseBand + offset);
+		const targetBand = opts?.bandFor ? opts.bandFor(op) : state[op].band || 1;
 		out.push(uniqueQuestion(op, targetBand, rng, seen));
 	}
 

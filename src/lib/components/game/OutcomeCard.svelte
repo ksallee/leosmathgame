@@ -1,6 +1,8 @@
 <script lang="ts">
 	import type { SessionOutcome } from '$lib/game/session';
 
+	export type LevelUpKind = 'band' | 'stage' | null;
+
 	interface Props {
 		outcome: SessionOutcome;
 		correct: number;
@@ -11,6 +13,7 @@
 		earnedCoins: number;
 		bonusCoins: number;
 		isReplay: boolean;
+		levelUp?: LevelUpKind;
 		onNext: () => void;
 		onMap: () => void;
 	}
@@ -25,6 +28,7 @@
 		earnedCoins,
 		bonusCoins,
 		isReplay,
+		levelUp = null,
 		onNext,
 		onMap
 	}: Props = $props();
@@ -46,6 +50,12 @@
 					<span class="star" class:on={i < stars}>★</span>
 				{/each}
 			</div>
+		{/if}
+
+		{#if won && levelUp === 'band'}
+			<div class="level-up-badge band">⭐ Niveau supérieur !</div>
+		{:else if won && levelUp === 'stage'}
+			<div class="level-up-badge stage">🔓 Mode débloqué !</div>
 		{/if}
 
 		<div class="paper">
@@ -285,6 +295,51 @@
 		color: rgba(90, 58, 26, 0.6);
 		font-size: clamp(13px, 1.5vw, 17px);
 		margin-top: 4px;
+	}
+	.level-up-badge {
+		padding: 8px 24px;
+		font: var(--font-w-bold) clamp(20px, 2.6vw, 28px) / 1 var(--font-display);
+		color: #fff;
+		text-shadow:
+			0 2px 0 rgba(0, 0, 0, 0.5),
+			0 4px 8px rgba(0, 0, 0, 0.4);
+		border-radius: var(--radius-pill);
+		box-shadow:
+			inset 0 2px 0 rgba(255, 255, 255, 0.3),
+			inset 0 -3px 0 rgba(0, 0, 0, 0.3),
+			0 6px 14px rgba(0, 0, 0, 0.5);
+		animation: badge-pop 0.5s var(--ease-bounce) backwards;
+		animation-delay: 0.7s;
+	}
+	.level-up-badge.band {
+		background: linear-gradient(180deg, #a855f7 0%, #7e22ce 50%, #581c87 100%);
+		box-shadow:
+			inset 0 2px 0 rgba(255, 255, 255, 0.3),
+			inset 0 -3px 0 rgba(0, 0, 0, 0.3),
+			0 0 0 3px #4c1d95,
+			0 6px 14px rgba(0, 0, 0, 0.5);
+	}
+	.level-up-badge.stage {
+		background: linear-gradient(180deg, #38bdf8 0%, #0284c7 50%, #075985 100%);
+		box-shadow:
+			inset 0 2px 0 rgba(255, 255, 255, 0.3),
+			inset 0 -3px 0 rgba(0, 0, 0, 0.3),
+			0 0 0 3px #0c4a6e,
+			0 6px 14px rgba(0, 0, 0, 0.5);
+		font-size: clamp(18px, 2.3vw, 24px);
+	}
+	@keyframes badge-pop {
+		0% {
+			transform: scale(0) rotate(-8deg);
+			opacity: 0;
+		}
+		70% {
+			transform: scale(1.15) rotate(2deg);
+			opacity: 1;
+		}
+		100% {
+			transform: scale(1) rotate(0);
+		}
 	}
 
 	.actions {

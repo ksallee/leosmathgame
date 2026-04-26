@@ -130,12 +130,26 @@ describe('evaluateCalibration', () => {
 
 describe('classifySpeed', () => {
 	it("returns 'normal' without history", () => {
-		const om = { band: 0, confidence: 0, medianTimeByBand: {}, recentByBand: {} };
+		const om = {
+			band: 0,
+			confidence: 0,
+			medianTimeByBand: {},
+			recentByBand: {},
+			stage: 'choices_easy' as const,
+			stageProgress: 0
+		};
 		expect(classifySpeed(om, 3, 1000)).toBe('normal');
 	});
 
 	it('classifies vs median (fast/normal/slow)', () => {
-		const om = { band: 0, confidence: 0, medianTimeByBand: { 3: 4000 }, recentByBand: {} };
+		const om = {
+			band: 0,
+			confidence: 0,
+			medianTimeByBand: { 3: 4000 },
+			recentByBand: {},
+			stage: 'choices_easy' as const,
+			stageProgress: 0
+		};
 		expect(classifySpeed(om, 3, 2000)).toBe('fast');
 		expect(classifySpeed(om, 3, 4000)).toBe('normal');
 		expect(classifySpeed(om, 3, 6000)).toBe('slow');
@@ -176,15 +190,31 @@ describe('recordAnswer — steady state', () => {
 		return s;
 	}
 
-	it('promotes band after enough fast-correct answers', () => {
+	it('does NOT auto-promote band on per-answer confidence (band only goes up via numpad consolidation in evaluateLevelOutcome)', () => {
 		const s = steady();
-		for (let i = 0; i < 4; i++) recordAnswer(s, event('add', 5, true, 100));
-		expect(s.add.band).toBeGreaterThanOrEqual(6);
+		for (let i = 0; i < 10; i++) recordAnswer(s, event('add', 5, true, 100));
+		expect(s.add.band).toBe(5);
 	});
 
 	it('demotes band after enough wrong answers', () => {
 		const s = steady();
 		for (let i = 0; i < 3; i++) recordAnswer(s, event('add', 5, false));
 		expect(s.add.band).toBeLessThanOrEqual(4);
+	});
+
+	it('mid-level demote: 3 wrongs in last 5 at band triggers demote (R4)', () => {
+		const s = steady();
+		// Pad with 5 alternating non-fluent answers so confidence stays in range,
+		// then a 3rd wrong inside the rolling window fires the burst guard.
+		recordAnswer(s, event('add', 5, true, 5000));
+		recordAnswer(s, event('add', 5, true, 5000));
+		recordAnswer(s, event('add', 5, true, 5000));
+		recordAnswer(s, event('add', 5, false));
+		recordAnswer(s, event('add', 5, false));
+		// Last 5 = [T, T, T, F, F]; confidence ≈ 1, no demote yet
+		expect(s.add.band).toBe(5);
+		recordAnswer(s, event('add', 5, false));
+		// Last 5 = [T, T, F, F, F] — three wrongs → mid-level demote
+		expect(s.add.band).toBe(4);
 	});
 });

@@ -12,7 +12,8 @@ import {
 	STARTING_PROBE_BAND,
 	RECENT_WINDOW,
 	CALIBRATION_WRONG_TO_LOCK,
-	CALIBRATION_MAX_TRIALS
+	CALIBRATION_MAX_TRIALS,
+	MID_LEVEL_DEMOTE_WRONGS_OF_5
 } from './config';
 import { clampBand, maxBand } from './generators';
 
@@ -28,7 +29,9 @@ function emptyOpMastery(): OpMastery {
 		band: 0,
 		confidence: 0,
 		medianTimeByBand: {},
-		recentByBand: {}
+		recentByBand: {},
+		stage: 'choices_easy',
+		stageProgress: 0
 	};
 }
 
@@ -41,7 +44,9 @@ export function createState(): MasteryState {
 		answered: 0,
 		leitner: [],
 		calibrations: [],
-		unlockedOps: []
+		unlockedOps: [],
+		fastCorrectStreaks: {},
+		pendingBridges: []
 	};
 }
 
@@ -147,7 +152,14 @@ function updateMedianTime(om: OpMastery, band: Band, timeMs: number) {
 	om.medianTimeByBand[band] = prev ? prev * 0.7 + timeMs * 0.3 : timeMs;
 }
 
-/** Adjust band/confidence based on a steady-state answer. */
+/** Adjust confidence based on a steady-state answer.
+ *  Band PROMOTION no longer happens here — bands only advance via numpad
+ *  consolidation in `evaluateLevelOutcome` (per the user's "stay on the same
+ *  band, level up your input method, then bump the band" model).
+ *  Band DEMOTION still happens here, both via the confidence floor and the
+ *  mid-level error-burst guard, since these are weakness signals that
+ *  shouldn't wait for level-end. On any demote, the stage also resets to
+ *  choices_easy — kid needs the scaffolding back. */
 function applySteadyState(
 	om: OpMastery,
 	op: Operation,
@@ -160,12 +172,30 @@ function applySteadyState(
 	} else {
 		om.confidence -= 2;
 	}
-	if (om.confidence >= 4) {
-		om.band = clampBand(op, om.band + 1);
+	let demoted = false;
+	if (om.confidence <= -3) {
+		const newBand = clampBand(op, om.band - 1);
+		if (newBand !== om.band) {
+			om.band = newBand;
+			om.stage = 'choices_easy';
+			om.stageProgress = 0;
+			demoted = true;
+		}
 		om.confidence = 0;
-	} else if (om.confidence <= -3) {
-		om.band = clampBand(op, om.band - 1);
-		om.confidence = 0;
+	}
+
+	if (!demoted) {
+		const recent = om.recentByBand[band] ?? [];
+		if (recent.length >= 5 && recent.filter((v) => !v).length >= MID_LEVEL_DEMOTE_WRONGS_OF_5) {
+			const newBand = clampBand(op, om.band - 1);
+			if (newBand !== om.band) {
+				om.band = newBand;
+				om.stage = 'choices_easy';
+				om.stageProgress = 0;
+				om.confidence = 0;
+				om.recentByBand[band] = [];
+			}
+		}
 	}
 }
 
