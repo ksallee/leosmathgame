@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { goto, beforeNavigate } from '$app/navigation';
+	import { goto, beforeNavigate, preloadCode } from '$app/navigation';
 	import {
 		loadProfile,
 		saveProfile,
@@ -67,6 +67,12 @@
 		if (saved) profile = saved;
 		loaded = true;
 		queueMicrotask(scrollToCurrent);
+		// Warm the JS chunks for the most likely next destinations so a tap on
+		// a chip is instant instead of waiting for a network fetch (especially
+		// painful on slow wifi where the kid taps repeatedly thinking nothing
+		// happened).
+		void preloadCode('/play');
+		void preloadCode('/shop');
 	});
 
 	$effect(() => {
@@ -135,6 +141,10 @@
 	function backHome() {
 		goto('/');
 	}
+
+	function goShop() {
+		goto('/shop');
+	}
 </script>
 
 <main class="game">
@@ -143,7 +153,7 @@
 		<button class="chip back" onclick={backHome} aria-label="Retour">←</button>
 		<div class="chip title">Carte des niveaux</div>
 		<div class="chip coins"><span aria-hidden="true">🪙</span> {profile.coins}</div>
-		<a class="chip shop" href="/shop" aria-label="Boutique">🛒</a>
+		<button class="chip shop" onclick={goShop} aria-label="Boutique">🛒</button>
 	</div>
 
 	<div class="scroller" bind:this={scroller}>
@@ -276,10 +286,10 @@
 	/* ---- Floating HUD ---- */
 	.hud-top {
 		position: absolute;
-		/* Padded down from the screen edge — iOS Safari treats top-edge taps as
-		   "show the address bar" and steals the touch. 24px puts our chips
-		   well below that hot zone on iPad. Combined with safe-area-inset-top
-		   for any device with a notch. */
+		/* Padded down from the screen edge so iOS Safari's top-edge gesture
+		   doesn't steal the tap. The whole bar accepts pointer-events
+		   directly — the see-through parent / opt-in child pattern was
+		   misrouting touches on iPad PWA. */
 		top: 0;
 		left: 0;
 		right: 0;
@@ -288,24 +298,27 @@
 		gap: var(--space-3);
 		padding: max(env(safe-area-inset-top), var(--space-6)) var(--space-4) var(--space-3);
 		z-index: 30;
-		pointer-events: none;
-	}
-	.hud-top > * {
 		pointer-events: auto;
 		touch-action: manipulation;
+		-webkit-tap-highlight-color: transparent;
 	}
 	.chip {
 		display: inline-flex;
 		align-items: center;
 		gap: var(--space-2);
 		padding: var(--space-3) var(--space-5);
-		background: rgba(15, 23, 42, 0.75);
-		backdrop-filter: blur(10px);
+		/* Solid bg (no backdrop-filter) — iPad PWA hit-testing on
+		   backdrop-filter elements is unreliable. Visual loss is minimal. */
+		background: rgba(15, 23, 42, 0.92);
+		border: none;
 		border-radius: var(--radius-pill);
 		color: var(--color-fg-50);
 		font: var(--font-w-bold) var(--text-lg) / 1 var(--font-display);
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 		min-height: 48px;
+		touch-action: manipulation;
+		-webkit-tap-highlight-color: transparent;
+		cursor: pointer;
 	}
 	.chip.back {
 		font-size: var(--text-2xl);

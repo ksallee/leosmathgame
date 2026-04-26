@@ -352,6 +352,11 @@
 			}
 			profile.lastViewedLevel = playLevel;
 			play('win');
+			// When a band-up triggers the purple "Niveau supérieur" badge, layer
+			// the level_up sparkle on top after the win fanfare settles.
+			if (lastTransitions.some((t) => !!t.bandChanged)) {
+				setTimeout(() => play('level_up', 0.7), 700);
+			}
 			void saveProfile(profile);
 		} else if (session.outcome === 'lost') {
 			play('lose');
@@ -671,16 +676,11 @@
 		display: flex;
 		align-items: center;
 		gap: var(--space-3);
-		/* Padded down past the iOS Safari top-edge gesture zone (which steals
-		   touches as "show address bar"), respecting safe-area-inset for
-		   notched devices. */
 		padding: max(env(safe-area-inset-top), var(--space-6)) var(--space-4) var(--space-3);
 		z-index: 30;
-		pointer-events: none;
-	}
-	.hud-top > * {
 		pointer-events: auto;
 		touch-action: manipulation;
+		-webkit-tap-highlight-color: transparent;
 	}
 	.hud-back {
 		display: inline-flex;
@@ -689,11 +689,13 @@
 		width: 56px;
 		height: 56px;
 		border-radius: var(--radius-pill);
-		background: rgba(15, 23, 42, 0.65);
-		backdrop-filter: blur(8px);
+		background: rgba(15, 23, 42, 0.92);
 		color: var(--color-fg-50);
 		font-size: var(--text-2xl);
 		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+		touch-action: manipulation;
+		-webkit-tap-highlight-color: transparent;
+		cursor: pointer;
 	}
 	.hud-back:active {
 		transform: scale(0.93);

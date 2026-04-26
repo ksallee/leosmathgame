@@ -46,7 +46,7 @@
 			profile.coins -= price;
 			profile.inventory.owned.push(skinId);
 			profile.inventory.equipped.hero = skinId;
-			play('win', 0.5);
+			play('shop_buy', 0.5);
 		}
 	}
 

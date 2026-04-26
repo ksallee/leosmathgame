@@ -5,7 +5,7 @@ const cache = new Map<string, HTMLAudioElement>();
 let muted = false;
 let unlocked = false;
 
-export type SfxName = 'correct' | 'wrong' | 'win' | 'lose';
+export type SfxName = 'correct' | 'wrong' | 'win' | 'lose' | 'level_up' | 'shop_buy';
 
 function get(name: SfxName): HTMLAudioElement | null {
 	if (typeof Audio === 'undefined') return null;
@@ -22,7 +22,7 @@ function get(name: SfxName): HTMLAudioElement | null {
 export function unlock(): void {
 	if (unlocked || typeof Audio === 'undefined') return;
 	unlocked = true;
-	const names: SfxName[] = ['correct', 'wrong', 'win', 'lose'];
+	const names: SfxName[] = ['correct', 'wrong', 'win', 'lose', 'level_up', 'shop_buy'];
 	for (const n of names) {
 		const a = get(n);
 		if (!a) continue;
