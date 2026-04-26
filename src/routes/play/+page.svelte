@@ -518,19 +518,29 @@
 			{/if}
 		</div>
 
-		<!-- Sword projectiles (Captain only) -->
-		{#each projectiles as p (p.id)}
-			<div
-				class="projectile"
-				style:--start-x="calc(100% - {HERO_EDGE + heroW / 2}px)"
-				style:--end-x="calc({MONSTER_EDGE + monsterW / 2}px + {p.targetPos} * (100% - {coinPathPx}px))"
-				onanimationend={(e) => {
-					if ((e.target as HTMLElement).classList.contains('projectile')) {
-						projectiles = projectiles.filter((x) => x.id !== p.id);
-					}
-				}}
-			></div>
-		{/each}
+		<!-- Per-hero projectiles (drives sprite + frame count from manifest). -->
+		{#if heroChar.projectile}
+			{@const proj = heroChar.projectile}
+			{@const projW = Math.round((proj.displayH * proj.frameW) / proj.frameH)}
+			{@const projH = proj.displayH}
+			{@const sheetW = projW * proj.frames}
+			{#each projectiles as p (p.id)}
+				<div
+					class="projectile p-{proj.frames}f"
+					style:--start-x="calc(100% - {HERO_EDGE + heroW / 2}px)"
+					style:--end-x="calc({MONSTER_EDGE + monsterW / 2}px + {p.targetPos} * (100% - {coinPathPx}px))"
+					style:--proj-w="{projW}px"
+					style:--proj-h="{projH}px"
+					style:--sheet-w="{sheetW}px"
+					style:background-image="url({proj.src})"
+					onanimationend={(e) => {
+						if ((e.target as HTMLElement).classList.contains('projectile')) {
+							projectiles = projectiles.filter((x) => x.id !== p.id);
+						}
+					}}
+				></div>
+			{/each}
+		{/if}
 	</div>
 
 	<!-- Input pad floater (numpad or 4-MCQ depending on per-band stage) -->
@@ -661,24 +671,28 @@
 		display: flex;
 		align-items: center;
 		gap: var(--space-3);
-		padding: var(--space-3) var(--space-4);
+		/* Padded down past the iOS Safari top-edge gesture zone (which steals
+		   touches as "show address bar"), respecting safe-area-inset for
+		   notched devices. */
+		padding: max(env(safe-area-inset-top), var(--space-6)) var(--space-4) var(--space-3);
 		z-index: 30;
 		pointer-events: none;
 	}
 	.hud-top > * {
 		pointer-events: auto;
+		touch-action: manipulation;
 	}
 	.hud-back {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		width: 44px;
-		height: 44px;
+		width: 56px;
+		height: 56px;
 		border-radius: var(--radius-pill);
 		background: rgba(15, 23, 42, 0.65);
 		backdrop-filter: blur(8px);
 		color: var(--color-fg-50);
-		font-size: var(--text-xl);
+		font-size: var(--text-2xl);
 		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
 	}
 	.hud-back:active {
@@ -763,7 +777,9 @@
 	/* ---- Prompt ---- */
 	.prompt-area {
 		position: absolute;
-		top: 70px;
+		/* Bumped 70 → 110 to clear the taller toolbar (which moved past the
+		   iOS top-edge gesture zone). */
+		top: 110px;
 		left: 0;
 		right: 0;
 		display: flex;
@@ -866,16 +882,18 @@
 	.monster-wrap.no-transition {
 		transition: none;
 	}
-	/* Sword projectile (Captain throws) — pixel-art spinning sword */
+	/* Per-hero projectile. Sprite, dimensions, and sheet width come from the
+	   manifest via inline CSS variables; the only thing that varies between
+	   heroes at the rule level is steps(N) for the frame-count, since CSS
+	   steps() doesn't accept custom properties. */
 	.projectile {
 		position: absolute;
 		bottom: 110px;
 		left: var(--start-x);
-		width: 80px;
-		height: 80px;
-		margin-left: -40px;
-		background-image: url('/sprites/decor/sword_spin.png');
-		background-size: 320px 80px;
+		width: var(--proj-w);
+		height: var(--proj-h);
+		margin-left: calc(-0.5 * var(--proj-w));
+		background-size: var(--sheet-w) var(--proj-h);
 		background-repeat: no-repeat;
 		background-position: 0 0;
 		image-rendering: pixelated;
@@ -883,9 +901,21 @@
 		filter: drop-shadow(0 0 10px rgba(252, 211, 77, 0.9)) drop-shadow(0 4px 6px rgba(0, 0, 0, 0.6));
 		z-index: 13;
 		pointer-events: none;
+	}
+	.projectile.p-3f {
 		animation:
 			throw-fly 0.55s ease-out forwards,
-			sword-spin 0.13s steps(4) infinite;
+			proj-spin 0.18s steps(3) infinite;
+	}
+	.projectile.p-4f {
+		animation:
+			throw-fly 0.55s ease-out forwards,
+			proj-spin 0.16s steps(4) infinite;
+	}
+	.projectile.p-5f {
+		animation:
+			throw-fly 0.55s ease-out forwards,
+			proj-spin 0.16s steps(5) infinite;
 	}
 	@keyframes throw-fly {
 		0% {
@@ -902,12 +932,12 @@
 			opacity: 0;
 		}
 	}
-	@keyframes sword-spin {
+	@keyframes proj-spin {
 		from {
 			background-position-x: 0;
 		}
 		to {
-			background-position-x: -320px;
+			background-position-x: calc(-1 * var(--sheet-w));
 		}
 	}
 	/* ---- Scene props ---- */

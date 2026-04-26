@@ -11,6 +11,17 @@ export interface SpriteState {
 	bottomPad?: number;
 }
 
+export interface ProjectileSpec {
+	src: string;
+	/** Native frame dimensions in the source sheet. */
+	frameW: number;
+	frameH: number;
+	frames: number;
+	/** Display height in CSS px while the projectile is in flight. Width is
+	 *  derived from the native aspect ratio so the art doesn't stretch. */
+	displayH: number;
+}
+
 export interface CharacterManifest {
 	id: string;
 	name: string;
@@ -18,6 +29,12 @@ export interface CharacterManifest {
 	run: SpriteState;
 	hit: SpriteState;
 	attack?: SpriteState;
+	projectile?: ProjectileSpec;
+	/** True when the source sprite natively faces LEFT (e.g. Treasure Hunters
+	 *  Crusty Crew). The Sprite component XORs this with the `flip` prop so
+	 *  callers can stay convention-agnostic — `<Sprite flip />` always means
+	 *  "face the monster on the left", `<Sprite />` always means "face right". */
+	facingLeft?: boolean;
 }
 
 const FRAME_MS = 80;
@@ -54,7 +71,62 @@ export const HEROES: Record<string, CharacterManifest> = {
 		idle: { ...state('/sprites/heroes/captain/idle.png', 64, 40, 5), bottomPad: 8 },
 		run: { ...state('/sprites/heroes/captain/run.png', 64, 40, 6), bottomPad: 8 },
 		hit: { ...state('/sprites/heroes/captain/hit.png', 64, 40, 4, false), bottomPad: 8 },
-		attack: { ...state('/sprites/heroes/captain/attack.png', 64, 40, 3, false), bottomPad: 8 }
+		attack: { ...state('/sprites/heroes/captain/attack.png', 64, 40, 3, false), bottomPad: 8 },
+		projectile: {
+			src: '/sprites/decor/sword_spin.png',
+			frameW: 20,
+			frameH: 20,
+			frames: 4,
+			displayH: 80
+		}
+	},
+	crabby: {
+		id: 'crabby',
+		name: 'crabby',
+		facingLeft: true,
+		idle: state('/sprites/heroes/crabby/idle.png', 72, 32, 9),
+		run: state('/sprites/heroes/crabby/run.png', 72, 32, 6),
+		hit: state('/sprites/heroes/crabby/hit.png', 72, 32, 4, false),
+		attack: state('/sprites/heroes/crabby/attack.png', 72, 32, 4, false),
+		projectile: {
+			src: '/sprites/decor/crabby_proj.png',
+			frameW: 118,
+			frameH: 24,
+			frames: 3,
+			displayH: 48
+		}
+	},
+	fierce_tooth: {
+		id: 'fierce_tooth',
+		name: 'fierce_tooth',
+		facingLeft: true,
+		idle: state('/sprites/heroes/fierce_tooth/idle.png', 34, 30, 8),
+		run: state('/sprites/heroes/fierce_tooth/run.png', 34, 30, 6),
+		hit: state('/sprites/heroes/fierce_tooth/hit.png', 34, 30, 4, false),
+		attack: state('/sprites/heroes/fierce_tooth/attack.png', 34, 30, 5, false),
+		projectile: {
+			src: '/sprites/decor/fierce_tooth_proj.png',
+			frameW: 22,
+			frameH: 24,
+			frames: 3,
+			displayH: 64
+		}
+	},
+	pink_star: {
+		id: 'pink_star',
+		name: 'pink_star',
+		facingLeft: true,
+		idle: state('/sprites/heroes/pink_star/idle.png', 34, 30, 8),
+		run: state('/sprites/heroes/pink_star/run.png', 34, 30, 6),
+		hit: state('/sprites/heroes/pink_star/hit.png', 34, 30, 4, false),
+		attack: state('/sprites/heroes/pink_star/attack.png', 34, 30, 4, false),
+		projectile: {
+			src: '/sprites/decor/pink_star_proj.png',
+			frameW: 16,
+			frameH: 12,
+			frames: 4,
+			displayH: 60
+		}
 	}
 };
 

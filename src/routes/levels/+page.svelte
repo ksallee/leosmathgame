@@ -18,7 +18,9 @@
 	let scroller: HTMLDivElement | undefined = $state();
 
 	const NODE_GAP = 150;
-	const TOP_PAD = 180;
+	// Bumped from 180 → 220 to absorb the taller toolbar (which now sits 24px
+	// below the screen edge to dodge iOS Safari's top-edge gesture zone).
+	const TOP_PAD = 220;
 
 	// Visible levels grow in chunks of 10 — beating level 10 unlocks 11-20, etc.
 	const totalLevels = $derived(Math.max(10, Math.ceil(profile.level / 10) * 10));
@@ -113,20 +115,20 @@
 		return d;
 	}
 
-	type Status = 'undone' | 'current' | 'done';
+	type Status = 'locked' | 'current' | 'done';
 	function levelStatus(level: number): Status {
 		if (findLevelRecord(profile, level)) return 'done';
 		if (level === profile.level) return 'current';
-		return 'undone'; // unlocked but never beaten (a gap from skipping)
+		return 'locked';
 	}
 
 	function tap(level: number) {
+		if (levelStatus(level) === 'locked') return;
 		profile.lastViewedLevel = level;
 		if (findLevelRecord(profile, level)) {
 			goto(`/play?replay=${level}`);
 		} else {
-			// 'current' or any 'undone' level (gap) — play it normally.
-			goto(level === profile.level ? '/play' : `/play?level=${level}`);
+			goto('/play');
 		}
 	}
 
@@ -226,12 +228,17 @@
 					class:boss={isBoss}
 					style="left: {nodeX(i)}%; top: {i * NODE_GAP + TOP_PAD}px"
 					onclick={() => tap(level)}
-					aria-label="Niveau {level}"
+					disabled={status === 'locked'}
+					aria-label="Niveau {level}{status === 'locked' ? ' (verrouillé)' : ''}"
 				>
 					<div class="bubble">
-						<div class="mini">
-							<Sprite character={monsterChar} state="idle" height={48} />
-						</div>
+						{#if status === 'locked'}
+							<div class="lock">🔒</div>
+						{:else}
+							<div class="mini">
+								<Sprite character={monsterChar} state="idle" height={48} />
+							</div>
+						{/if}
 						<div class="num">{level}</div>
 					</div>
 					{#if record}
@@ -269,34 +276,42 @@
 	/* ---- Floating HUD ---- */
 	.hud-top {
 		position: absolute;
+		/* Padded down from the screen edge — iOS Safari treats top-edge taps as
+		   "show the address bar" and steals the touch. 24px puts our chips
+		   well below that hot zone on iPad. Combined with safe-area-inset-top
+		   for any device with a notch. */
 		top: 0;
 		left: 0;
 		right: 0;
 		display: flex;
 		align-items: center;
 		gap: var(--space-3);
-		padding: var(--space-3) var(--space-4);
+		padding: max(env(safe-area-inset-top), var(--space-6)) var(--space-4) var(--space-3);
 		z-index: 30;
 		pointer-events: none;
 	}
 	.hud-top > * {
 		pointer-events: auto;
+		touch-action: manipulation;
 	}
 	.chip {
 		display: inline-flex;
 		align-items: center;
 		gap: var(--space-2);
-		padding: var(--space-2) var(--space-4);
-		background: rgba(15, 23, 42, 0.7);
+		padding: var(--space-3) var(--space-5);
+		background: rgba(15, 23, 42, 0.75);
 		backdrop-filter: blur(10px);
 		border-radius: var(--radius-pill);
 		color: var(--color-fg-50);
-		font: var(--font-w-bold) var(--text-base) / 1 var(--font-display);
+		font: var(--font-w-bold) var(--text-lg) / 1 var(--font-display);
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+		min-height: 48px;
 	}
 	.chip.back {
-		font-size: var(--text-xl);
-		padding: var(--space-2) var(--space-3);
+		font-size: var(--text-2xl);
+		padding: var(--space-3) var(--space-4);
+		min-width: 56px;
+		justify-content: center;
 	}
 	.chip.title {
 		flex: 1;
@@ -309,9 +324,11 @@
 		font-variant-numeric: tabular-nums;
 	}
 	.chip.shop {
-		font-size: var(--text-xl);
-		padding: var(--space-2) var(--space-3);
-		background: rgba(15, 23, 42, 0.7);
+		font-size: var(--text-2xl);
+		padding: var(--space-3) var(--space-4);
+		min-width: 56px;
+		justify-content: center;
+		background: rgba(15, 23, 42, 0.75);
 		box-shadow:
 			inset 0 2px 0 rgba(56, 189, 248, 0.3),
 			inset 0 -3px 0 rgba(0, 0, 0, 0.4),
@@ -346,7 +363,10 @@
 	}
 	.world-label {
 		position: absolute;
-		top: 80px;
+		/* Pushed down from 80 → 120 so it clears the taller toolbar
+		   (toolbar grew when we moved it past the iOS top-edge gesture
+		   zone). */
+		top: 120px;
 		left: 24px;
 		display: flex;
 		flex-direction: column;
@@ -431,8 +451,14 @@
 	.node {
 		position: absolute;
 		transform: translateX(-50%);
-		width: 110px;
-		height: 130px;
+		/* Hit area extends well past the visible bubble. The 88px circle is
+		   what the kid aims for; the surrounding 30px+ on each side absorbs
+		   off-center taps on a tablet. touch-action: manipulation kills the
+		   300ms double-tap-zoom delay AND raises the movement threshold for
+		   "this is a scroll, not a tap" — without it, a tiny finger drift
+		   during touch was canceling the click. */
+		width: 140px;
+		height: 150px;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
@@ -441,6 +467,8 @@
 		background: transparent;
 		border: none;
 		z-index: 5;
+		touch-action: manipulation;
+		-webkit-tap-highlight-color: transparent;
 	}
 	.bubble {
 		position: relative;
@@ -498,11 +526,22 @@
 			0 0 24px rgba(252, 211, 77, 0.6),
 			0 8px 16px rgba(0, 0, 0, 0.6);
 	}
+	.node.locked {
+		cursor: not-allowed;
+	}
 	.node.locked .bubble {
-		filter: grayscale(0.7) brightness(0.6);
+		filter: grayscale(0.7) brightness(0.55);
+	}
+	.node.locked:active .bubble {
+		transform: none;
 	}
 	.node.locked .num {
 		opacity: 0.5;
+	}
+	.lock {
+		font-size: 32px;
+		line-height: 1;
+		filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.5));
 	}
 	.node.locked .mini {
 		opacity: 0.45;

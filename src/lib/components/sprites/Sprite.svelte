@@ -13,6 +13,10 @@
 	let { character, state = 'idle', height = 128, flip = false }: Props = $props();
 
 	const current = $derived(character[state] ?? character.idle);
+	// XOR with the manifest's native facing so callers don't need to know which
+	// direction the source art was drawn in. `<Sprite />` always means "face
+	// right", `<Sprite flip />` always means "face left".
+	const effectiveFlip = $derived(character.facingLeft ? !flip : flip);
 	const bodyH = $derived(current.frameH - (current.bottomPad ?? 0));
 	const scale = $derived(height / bodyH);
 	const w = $derived(current.frameW * scale);
@@ -25,7 +29,7 @@
 	<div class="wrap" style:width="{w}px" style:height="{visibleH}px">
 		<div
 			class="sprite"
-			class:flip
+			class:flip={effectiveFlip}
 			class:loop={current.loop}
 			class:once={!current.loop}
 			style:--bg="url({current.src})"

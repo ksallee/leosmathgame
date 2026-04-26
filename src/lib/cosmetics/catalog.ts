@@ -4,8 +4,10 @@ export const HERO_SKINS: SpriteSkin[] = [
 	{ id: 'pink_man', name: 'Rose', slot: 'hero', price: 0 },
 	{ id: 'ninja_frog', name: 'Ninja Grenouille', slot: 'hero', price: 80 },
 	{ id: 'mask_dude', name: 'Masque', slot: 'hero', price: 120 },
-	{ id: 'virtual_guy', name: 'Virtuel', slot: 'hero', price: 200, unlockLevel: 5 },
-	{ id: 'captain', name: 'Capitaine ⚔', slot: 'hero', price: 300, unlockLevel: 11 }
+	{ id: 'crabby', name: 'Crabe ✦', slot: 'hero', price: 250 },
+	{ id: 'fierce_tooth', name: 'Dent Féroce ✦', slot: 'hero', price: 350 },
+	{ id: 'pink_star', name: 'Étoile Rose ✦', slot: 'hero', price: 500 },
+	{ id: 'captain', name: 'Capitaine ⚔', slot: 'hero', price: 750 }
 ];
 
 export const MONSTER_SKINS: SpriteSkin[] = [
