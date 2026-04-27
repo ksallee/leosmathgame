@@ -16,6 +16,15 @@
 				>
 			</a>
 		</li>
+		<li>
+			<a href="/lab/numberline">
+				<strong>Number-line jump tune</strong>
+				<span
+					>Number-line mini-game scene. Tap a tick → hero hops to it. Sliders for range, tick
+					spacing, hop arc + duration, hero scale. Iterate on level-design feel.</span
+				>
+			</a>
+		</li>
 	</ul>
 
 	<a class="back" href="/">← Retour</a>
