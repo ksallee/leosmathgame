@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { clearAll } from '$lib/storage/persist';
 
+	const isDev = import.meta.env.DEV;
 	let resetting = $state(false);
 
 	async function resetProfile() {
@@ -19,6 +20,9 @@
 	<p>v1 en construction.</p>
 	<a href="/levels" class="cta">Jouer</a>
 	<a href="/debug" class="cta-secondary">Debug</a>
+	{#if isDev}
+		<a href="/lab" class="cta-secondary">Lab (dev)</a>
+	{/if}
 	<button class="cta-danger" type="button" onclick={resetProfile} disabled={resetting}>
 		{resetting ? 'Effacement…' : 'Réinitialiser le profil'}
 	</button>
