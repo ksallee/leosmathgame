@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createSession, currentQuestion, tick, answer, summarize } from './session';
-import { WIN_CORRECT, MONSTER_REACHED_POS, PUSH_BACK_PER_CORRECT } from './config';
-import type { Question } from '$lib/engine';
+import { WIN_CORRECT, MONSTER_REACHED_POS, PUSH_BACK_PER_CORRECT } from './sessionConfig';
+import type { Question } from '$lib/curriculum';
 
 function fakeQuestion(answer: number, idx = 0): Question {
 	return {

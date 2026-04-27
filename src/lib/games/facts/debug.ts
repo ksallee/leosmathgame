@@ -1,4 +1,4 @@
-import type { MasteryState, Question, Operation, AnswerEvent } from './types';
+import type { MasteryState, Question, Operation, AnswerEvent } from '$lib/curriculum/types';
 
 const OP_LABEL: Record<Operation, string> = {
 	add: '+',

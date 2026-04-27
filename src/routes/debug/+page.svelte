@@ -1,13 +1,13 @@
 <script lang="ts">
 	import {
-		generateLevel,
 		recordAnswer,
 		recordForLeitner,
 		dueEntries,
 		type Question,
 		type AnswerEvent
-	} from '$lib/engine';
-	import { opLabel, opSummaries, makeAnswerEvent, summarizeLevel } from '$lib/engine/debug';
+	} from '$lib/curriculum';
+	import { generateLevel } from '$lib/games/facts';
+	import { opLabel, opSummaries, makeAnswerEvent, summarizeLevel } from '$lib/games/facts/debug';
 	import {
 		loadProfile,
 		saveProfile,

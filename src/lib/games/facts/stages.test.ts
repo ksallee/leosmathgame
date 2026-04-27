@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { createState, applyUnlocks } from './mastery';
+import { createState, applyUnlocks } from '$lib/curriculum/mastery';
 import { stageForQuestion, evaluateLevelOutcome, getStageFor } from './stages';
-import type { AnswerEvent, MasteryState, Question } from './types';
+import type { AnswerEvent, MasteryState, Question } from '$lib/curriculum/types';
 
 function q(op: AnswerEvent['operation'], band: number, n = 1): Question {
 	return {

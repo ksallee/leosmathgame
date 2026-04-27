@@ -1,5 +1,5 @@
-import type { SeededRng } from '$lib/engine/types';
-import { makeRng } from '$lib/engine/rng';
+import type { SeededRng } from '$lib/curriculum/types';
+import { makeRng } from '$lib/curriculum/rng';
 
 export type WorldTheme = 'forest' | 'desert' | 'cave' | 'snow' | 'pirate';
 

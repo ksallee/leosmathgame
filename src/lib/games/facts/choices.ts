@@ -1,4 +1,4 @@
-import { makeRng } from './rng';
+import { makeRng } from '$lib/curriculum/rng';
 
 export type ChoiceDifficulty = 'easy' | 'hard';
 

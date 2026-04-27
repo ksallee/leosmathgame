@@ -6,7 +6,7 @@ import type {
 	PresentationStage,
 	Question,
 	AnswerEvent
-} from './types';
+} from '$lib/curriculum/types';
 import { clampBand } from './generators';
 
 const CHOICES_EASY_EXPOSURES_TO_ADVANCE = 3;

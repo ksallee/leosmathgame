@@ -15,7 +15,7 @@ import {
 	CALIBRATION_MAX_TRIALS,
 	MID_LEVEL_DEMOTE_WRONGS_OF_5
 } from './config';
-import { clampBand, maxBand } from './generators';
+import { clampBand, maxBand } from '$lib/games/facts/generators';
 
 const ALL_OPS: readonly Operation[] = ['add', 'sub', 'mul', 'div'];
 

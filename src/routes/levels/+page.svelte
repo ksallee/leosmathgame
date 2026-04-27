@@ -10,7 +10,7 @@
 	} from '$lib/storage/persist';
 	import { pickMonsterForLevel, DEFAULT_HERO_ID } from '$lib/cosmetics/catalog';
 	import { HEROES, MONSTERS } from '$lib/sprites/manifest';
-	import { worldThemeFor, LEVELS_PER_WORLD, type WorldTheme } from '$lib/game/levelConfig';
+	import { worldThemeFor, LEVELS_PER_WORLD, type WorldTheme } from '$lib/games/facts/levelConfig';
 	import Sprite from '$lib/components/sprites/Sprite.svelte';
 
 	let profile: Profile = $state(emptyProfile());

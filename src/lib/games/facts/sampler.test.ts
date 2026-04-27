@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { generateLevel } from './sampler';
-import { createState, recordAnswer } from './mastery';
-import type { Question, MasteryState } from './types';
-import { QUESTIONS_PER_LEVEL, OP_UNLOCK_LEVEL } from './config';
+import { createState, recordAnswer } from '$lib/curriculum/mastery';
+import type { Question, MasteryState } from '$lib/curriculum/types';
+import { QUESTIONS_PER_LEVEL } from './config';
+import { OP_UNLOCK_LEVEL } from '$lib/curriculum/config';
 
 function answerAll(state: MasteryState, qs: Question[], correct: boolean) {
 	for (const q of qs) {

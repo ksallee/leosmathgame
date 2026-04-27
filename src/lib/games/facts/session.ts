@@ -1,5 +1,5 @@
-import type { Question, AnswerEvent } from '$lib/engine';
-import { makeAnswerEvent } from '$lib/engine/debug';
+import type { Question, AnswerEvent } from '$lib/curriculum';
+import { makeAnswerEvent } from './debug';
 import {
 	WIN_CORRECT,
 	MONSTER_SPEED_PER_SECOND,
@@ -7,7 +7,7 @@ import {
 	WRONG_PENALTY,
 	MONSTER_START_POS,
 	MONSTER_REACHED_POS
-} from './config';
+} from './sessionConfig';
 
 export type SessionOutcome = 'in_progress' | 'won' | 'lost';
 export type QuestionProvider = () => Question;

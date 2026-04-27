@@ -1,4 +1,4 @@
-import type { Operation, Band, Question, SeededRng } from '../types';
+import type { Operation, Band, Question, SeededRng } from '$lib/curriculum/types';
 import type { OpGenerators } from './util';
 import { additionGen } from './addition';
 import { subtractionGen } from './subtraction';

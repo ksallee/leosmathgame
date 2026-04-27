@@ -3,20 +3,22 @@
 	import { goto, beforeNavigate } from '$app/navigation';
 	import { page } from '$app/state';
 	import {
-		generateLevel,
 		recordAnswer,
 		recordForLeitner,
 		opsUnlockedAt,
-		generateChoices,
-		stageForQuestion,
-		evaluateLevelOutcome,
 		type Question,
 		type GenerateOptions,
 		type Operation,
-		type PresentationStage,
+		type PresentationStage
+	} from '$lib/curriculum';
+	import {
+		generateLevel,
+		generateChoices,
+		stageForQuestion,
+		evaluateLevelOutcome,
 		type StageTransition
-	} from '$lib/engine';
-	import { opLabel } from '$lib/engine/debug';
+	} from '$lib/games/facts';
+	import { opLabel } from '$lib/games/facts/debug';
 	import {
 		loadProfile,
 		saveProfile,
@@ -32,9 +34,9 @@
 		tick,
 		answer,
 		type SessionState
-	} from '$lib/game/session';
-	import { WIN_CORRECT, COINS_PER_WIN } from '$lib/game/config';
-	import { levelConfig } from '$lib/game/levelConfig';
+	} from '$lib/games/facts/session';
+	import { WIN_CORRECT, COINS_PER_WIN } from '$lib/games/facts/sessionConfig';
+	import { levelConfig } from '$lib/games/facts/levelConfig';
 	import { pickMonsterForLevel, DEFAULT_HERO_ID } from '$lib/cosmetics/catalog';
 	import { HEROES, MONSTERS, treasureForVariant } from '$lib/sprites/manifest';
 	import Numpad from '$lib/components/ui/Numpad.svelte';

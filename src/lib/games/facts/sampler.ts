@@ -6,12 +6,12 @@ import type {
 	SeededRng,
 	GenerateOptions,
 	PendingBridge
-} from './types';
+} from '$lib/curriculum/types';
 import { QUESTIONS_PER_LEVEL, REVIEW_FRACTION } from './config';
-import { applyUnlocks, getCalibration, nextProbeBand } from './mastery';
-import { dueEntries } from './leitner';
+import { applyUnlocks, getCalibration, nextProbeBand } from '$lib/curriculum/mastery';
+import { dueEntries } from '$lib/curriculum/leitner';
 import { generate } from './generators';
-import { makeRng } from './rng';
+import { makeRng } from '$lib/curriculum/rng';
 
 const SYM: Record<Operation, '+' | '−' | '×' | '÷'> = {
 	add: '+',

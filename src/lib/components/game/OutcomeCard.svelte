@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { SessionOutcome } from '$lib/game/session';
+	import type { SessionOutcome } from '$lib/games/facts/session';
 
 	export type LevelUpKind = 'band' | 'stage' | null;
 

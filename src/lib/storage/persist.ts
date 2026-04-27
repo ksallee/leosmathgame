@@ -1,7 +1,7 @@
 import { browser } from '$app/environment';
 import { openDB, type IDBPDatabase } from 'idb';
-import type { MasteryState, LevelRecord, Operation } from '$lib/engine';
-import { createState } from '$lib/engine';
+import type { MasteryState, LevelRecord, Operation } from '$lib/curriculum';
+import { createState } from '$lib/curriculum';
 import { DEFAULT_HERO_ID } from '$lib/cosmetics/catalog';
 
 const DB_NAME = 'maths_game_7';

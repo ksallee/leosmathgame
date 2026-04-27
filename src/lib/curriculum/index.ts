@@ -1,3 +1,7 @@
+// Cross-game curriculum: per-skill progression (mastery, calibration, bands),
+// spaced repetition (Leitner), derived-fact bridges, RNG. Anything tracked
+// across multiple mini-game types lives here.
+
 export type {
 	Operation,
 	Band,
@@ -12,16 +16,24 @@ export type {
 	LevelRecord,
 	GenerateOptions,
 	PresentationStage,
-	PendingBridge
+	PendingBridge,
+	SeededRng
 } from './types';
+
 export {
-	QUESTIONS_PER_LEVEL,
 	OP_UNLOCK_LEVEL,
 	STARTING_PROBE_BAND,
 	LEITNER_GRANULARITY,
 	LEITNER_INTERVALS,
-	LEITNER_WALL_FLOORS_MS
+	LEITNER_WALL_FLOORS_MS,
+	RETRIEVAL_TIME_MS,
+	RETRIEVAL_PROMOTE_STREAK,
+	RECENT_WINDOW,
+	MID_LEVEL_DEMOTE_WRONGS_OF_5,
+	CALIBRATION_WRONG_TO_LOCK,
+	CALIBRATION_MAX_TRIALS
 } from './config';
+
 export {
 	createState,
 	applyUnlocks,
@@ -32,16 +44,7 @@ export {
 	recordAnswer,
 	opsUnlockedAt
 } from './mastery';
+
 export { recordForLeitner, dueEntries } from './leitner';
-export { generateLevel } from './sampler';
-export { generate, clampBand, maxBand } from './generators';
 export { makeRng } from './rng';
-export { generateChoices, type ChoiceDifficulty } from './choices';
 export { bridgesFor, type BridgeTarget } from './bridges';
-export {
-	getStageFor,
-	stageForQuestion,
-	evaluateLevelOutcome,
-	type StageTransition,
-	type OpStats
-} from './stages';

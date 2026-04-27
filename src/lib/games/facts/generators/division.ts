@@ -1,4 +1,4 @@
-import type { SeededRng, Question } from '../types';
+import type { SeededRng, Question } from '$lib/curriculum/types';
 import { makeQuestion, type OpGenerators } from './util';
 
 const q = (rng: SeededRng, band: number, a: number, b: number): Question =>

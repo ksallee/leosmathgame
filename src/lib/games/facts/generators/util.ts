@@ -1,4 +1,4 @@
-import type { Operation, Band, Question, SeededRng } from '../types';
+import type { Operation, Band, Question, SeededRng } from '$lib/curriculum/types';
 
 export function makeQuestion(
 	operation: Operation,

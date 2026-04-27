@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { worldThemeFor, type WorldTheme } from '$lib/game/levelConfig';
+	import { worldThemeFor, type WorldTheme } from '$lib/games/facts/levelConfig';
 
 	interface Props {
 		level: number;

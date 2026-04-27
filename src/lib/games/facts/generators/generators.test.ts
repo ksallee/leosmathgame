@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { generate, clampBand, maxBand } from './index';
-import { makeRng } from '../rng';
-import type { Operation } from '../types';
+import { makeRng } from '$lib/curriculum/rng';
+import type { Operation } from '$lib/curriculum/types';
 
 const SAMPLES = 80;
 
