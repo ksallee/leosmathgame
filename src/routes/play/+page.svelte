@@ -2,6 +2,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { goto, beforeNavigate } from '$app/navigation';
 	import { page } from '$app/state';
+	import { gameForLevel } from '$lib/rotator/rotation';
 	import {
 		recordAnswer,
 		recordForLeitner,
@@ -374,6 +375,13 @@
 			goto('/levels');
 			return;
 		}
+		// Route via rotator — the next level may be the other game type.
+		const nextLevel = profile.level;
+		const nextGame = gameForLevel(nextLevel);
+		if (nextGame !== 'facts') {
+			goto('/play/numberline');
+			return;
+		}
 		startLevel();
 	}
 
@@ -409,6 +417,11 @@
 					<div class="hud-pill score-pill">
 						✓ <span class="hi">{session?.correct ?? 0}</span>
 						<span class="dim">/ {WIN_CORRECT}</span>
+					</div>
+					<div class="hud-pill lives-pill" aria-label="Vies restantes">
+						❤ <span class="num"
+							>{Math.max(0, Math.ceil((1 - (session?.monsterPos ?? 0)) / 0.2))}</span
+						>
 					</div>
 					<div class="hud-pill coin-pill">
 						🪙 <span class="num">{profile.coins}</span>
@@ -768,6 +781,12 @@
 	}
 	.coin-pill {
 		color: var(--color-coin-500);
+	}
+	.lives-pill {
+		color: #f87171;
+	}
+	.lives-pill .num {
+		color: #fef2f2;
 	}
 	.progressbar {
 		height: 6px;

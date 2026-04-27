@@ -280,7 +280,7 @@
 			>
 				<Sprite
 					character={heroChar}
-					state={hero.anim === 'jump' || hero.anim === 'fall' ? 'idle' : hero.anim}
+					state={hero.anim}
 					height={tunables.heroHeight}
 					flip={hero.facing === -1}
 				/>

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto, beforeNavigate, preloadCode } from '$app/navigation';
+	import { gameForLevel } from '$lib/rotator/rotation';
 	import {
 		loadProfile,
 		saveProfile,
@@ -72,6 +73,7 @@
 		// painful on slow wifi where the kid taps repeatedly thinking nothing
 		// happened).
 		void preloadCode('/play');
+		void preloadCode('/play/numberline');
 		void preloadCode('/shop');
 	});
 
@@ -131,10 +133,11 @@
 	function tap(level: number) {
 		if (levelStatus(level) === 'locked') return;
 		profile.lastViewedLevel = level;
+		const route = gameForLevel(level) === 'numberline' ? '/play/numberline' : '/play';
 		if (findLevelRecord(profile, level)) {
-			goto(`/play?replay=${level}`);
+			goto(`${route}?replay=${level}`);
 		} else {
-			goto('/play');
+			goto(route);
 		}
 	}
 

@@ -74,6 +74,18 @@ export interface MasteryState {
 	 *  retrieval-masters 3+5, we enqueue 5+3 (and other rule-derived neighbors)
 	 *  here so the sampler can prioritize them over pure random sampling. */
 	pendingBridges: PendingBridge[];
+	/** Number-line jump mini-game progression. Tracked separately from facts
+	 *  mastery per the rotation-strategy brief (don't unify SRS across game
+	 *  types in v1) — same kid skill but different presentation, separate
+	 *  band ladders. */
+	numberline: NumberlineMastery;
+}
+
+export interface NumberlineMastery {
+	/** Current NL band per question kind (1-7 per the band ladder in
+	 *  src/lib/games/numberline/). Lazy-initialized to band 1 when an op is
+	 *  played for the first time. */
+	band: Partial<Record<Operation, Band>>;
 }
 
 export interface PendingBridge {

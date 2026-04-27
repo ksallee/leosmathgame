@@ -55,7 +55,8 @@ function migrate(p: Partial<Profile>): Profile {
 				...empty.mastery,
 				...p.mastery,
 				fastCorrectStreaks: p.mastery.fastCorrectStreaks ?? {},
-				pendingBridges: p.mastery.pendingBridges ?? []
+				pendingBridges: p.mastery.pendingBridges ?? [],
+				numberline: p.mastery.numberline ?? { band: {} }
 			}
 		: empty.mastery;
 	return {

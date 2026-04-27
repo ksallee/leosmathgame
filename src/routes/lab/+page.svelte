@@ -25,6 +25,15 @@
 				>
 			</a>
 		</li>
+		<li>
+			<a href="/lab/numberline-fullscene">
+				<strong>Number-line full-scene</strong>
+				<span
+					>Production NumberlineScene rendered full-screen with band/theme/character pickers. Use to
+					debug all bands quickly without grinding through levels.</span
+				>
+			</a>
+		</li>
 	</ul>
 
 	<a class="back" href="/">← Retour</a>

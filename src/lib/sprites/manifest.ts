@@ -29,6 +29,8 @@ export interface CharacterManifest {
 	run: SpriteState;
 	hit: SpriteState;
 	attack?: SpriteState;
+	jump?: SpriteState;
+	fall?: SpriteState;
 	projectile?: ProjectileSpec;
 	/** True when the source sprite natively faces LEFT (e.g. Treasure Hunters
 	 *  Crusty Crew). The Sprite component XORs this with the `flip` prop so
@@ -56,7 +58,10 @@ function hero(id: string): CharacterManifest {
 		name: id,
 		idle: state(`${base}/idle.png`, 32, 32, 11),
 		run: state(`${base}/run.png`, 32, 32, 12),
-		hit: state(`${base}/hit.png`, 32, 32, 7, false)
+		hit: state(`${base}/hit.png`, 32, 32, 7, false),
+		// PA1 ships single-frame jump + fall poses (loop=false; just hold).
+		jump: state(`${base}/jump.png`, 32, 32, 1, false),
+		fall: state(`${base}/fall.png`, 32, 32, 1, false)
 	};
 }
 
@@ -72,6 +77,8 @@ export const HEROES: Record<string, CharacterManifest> = {
 		run: { ...state('/sprites/heroes/captain/run.png', 64, 40, 6), bottomPad: 8 },
 		hit: { ...state('/sprites/heroes/captain/hit.png', 64, 40, 4, false), bottomPad: 8 },
 		attack: { ...state('/sprites/heroes/captain/attack.png', 64, 40, 3, false), bottomPad: 8 },
+		jump: { ...state('/sprites/heroes/captain/jump.png', 64, 40, 3, false), bottomPad: 8 },
+		fall: { ...state('/sprites/heroes/captain/fall.png', 64, 40, 1, false), bottomPad: 8 },
 		projectile: {
 			src: '/sprites/decor/sword_spin.png',
 			frameW: 20,
@@ -88,6 +95,8 @@ export const HEROES: Record<string, CharacterManifest> = {
 		run: state('/sprites/heroes/crabby/run.png', 72, 32, 6),
 		hit: state('/sprites/heroes/crabby/hit.png', 72, 32, 4, false),
 		attack: state('/sprites/heroes/crabby/attack.png', 72, 32, 4, false),
+		jump: state('/sprites/heroes/crabby/jump.png', 72, 32, 3, false),
+		fall: state('/sprites/heroes/crabby/fall.png', 72, 32, 1, false),
 		projectile: {
 			src: '/sprites/decor/crabby_proj.png',
 			frameW: 118,
@@ -104,6 +113,8 @@ export const HEROES: Record<string, CharacterManifest> = {
 		run: state('/sprites/heroes/fierce_tooth/run.png', 34, 30, 6),
 		hit: state('/sprites/heroes/fierce_tooth/hit.png', 34, 30, 4, false),
 		attack: state('/sprites/heroes/fierce_tooth/attack.png', 34, 30, 5, false),
+		jump: state('/sprites/heroes/fierce_tooth/jump.png', 34, 30, 3, false),
+		fall: state('/sprites/heroes/fierce_tooth/fall.png', 34, 30, 1, false),
 		projectile: {
 			src: '/sprites/decor/fierce_tooth_proj.png',
 			frameW: 22,
@@ -120,6 +131,8 @@ export const HEROES: Record<string, CharacterManifest> = {
 		run: state('/sprites/heroes/pink_star/run.png', 34, 30, 6),
 		hit: state('/sprites/heroes/pink_star/hit.png', 34, 30, 4, false),
 		attack: state('/sprites/heroes/pink_star/attack.png', 34, 30, 4, false),
+		jump: state('/sprites/heroes/pink_star/jump.png', 34, 30, 3, false),
+		fall: state('/sprites/heroes/pink_star/fall.png', 34, 30, 1, false),
 		projectile: {
 			src: '/sprites/decor/pink_star_proj.png',
 			frameW: 16,
