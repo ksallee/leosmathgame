@@ -113,9 +113,18 @@
 		if (roCleanup) roCleanup();
 	});
 
-	// When the question (derived from band/kind/seed) changes, reset the
-	// scene to its idle state on the new question's start tick.
+	// Reset only when the seed/kind ACTUALLY changes — the `question` signal
+	// can re-fire spuriously when ancestor reactives notify (e.g., parent
+	// mutates profile.mastery during finishLevel). Without this guard the
+	// hero "snaps back" to startTick after a winning hop.
+	let lastSeenSeed = -1;
+	let lastSeenKind: QuestionKind | null = null;
 	$effect(() => {
+		const seed = questionSeed;
+		const kind = questionKind;
+		if (seed === lastSeenSeed && kind === lastSeenKind) return;
+		lastSeenSeed = seed;
+		lastSeenKind = kind;
 		const q = question;
 		heroTick = q.startTick;
 		heroYOffset = 0;

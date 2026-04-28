@@ -34,6 +34,15 @@
 				>
 			</a>
 		</li>
+		<li>
+			<a href="/lab/bridge">
+				<strong>Bridge (passer la dizaine)</strong>
+				<span
+					>Multi-step scaffolded bridging with per-world tokens. 8 bands from within-20 to two-digit
+					+/−. Single split-view lab.</span
+				>
+			</a>
+		</li>
 	</ul>
 
 	<a class="back" href="/">← Retour</a>

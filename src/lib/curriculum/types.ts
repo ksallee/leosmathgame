@@ -79,6 +79,10 @@ export interface MasteryState {
 	 *  types in v1) — same kid skill but different presentation, separate
 	 *  band ladders. */
 	numberline: NumberlineMastery;
+	/** Bridge mini-game progression. Single band index (1-8) — the bridge band
+	 *  ladder in src/lib/games/bridge/ doesn't split by op (each band has its
+	 *  own op baked in: B1-B5 add, B6-B8 sub). */
+	bridge: BridgeMastery;
 }
 
 export interface NumberlineMastery {
@@ -86,6 +90,12 @@ export interface NumberlineMastery {
 	 *  src/lib/games/numberline/). Lazy-initialized to band 1 when an op is
 	 *  played for the first time. */
 	band: Partial<Record<Operation, Band>>;
+}
+
+export interface BridgeMastery {
+	/** Current bridge band (1-8). Single global band — the band ladder mixes
+	 *  ops by design (B1-B5 add, B6-B8 sub). Lazy-initialized to band 1. */
+	band: Band;
 }
 
 export interface PendingBridge {

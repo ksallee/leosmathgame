@@ -74,6 +74,7 @@
 		// happened).
 		void preloadCode('/play');
 		void preloadCode('/play/numberline');
+		void preloadCode('/play/bridge');
 		void preloadCode('/shop');
 	});
 
@@ -133,7 +134,9 @@
 	function tap(level: number) {
 		if (levelStatus(level) === 'locked') return;
 		profile.lastViewedLevel = level;
-		const route = gameForLevel(level) === 'numberline' ? '/play/numberline' : '/play';
+		const game = gameForLevel(level);
+		const route =
+			game === 'numberline' ? '/play/numberline' : game === 'bridge' ? '/play/bridge' : '/play';
 		if (findLevelRecord(profile, level)) {
 			goto(`${route}?replay=${level}`);
 		} else {
@@ -236,8 +239,9 @@
 				{@const monsterSkin = pickMonsterForLevel(level)}
 				{@const monsterChar = MONSTERS[monsterSkin.id] ?? MONSTERS.slime}
 				{@const isBoss = level % 5 === 0}
+				{@const gameType = gameForLevel(level)}
 				<button
-					class="node {status}"
+					class="node {status} game-{gameType}"
 					class:boss={isBoss}
 					style="left: {nodeX(i)}%; top: {i * NODE_GAP + TOP_PAD}px"
 					onclick={() => tap(level)}
@@ -530,6 +534,37 @@
 		box-shadow:
 			0 0 0 3px #5a3a1a,
 			0 4px 4px rgba(0, 0, 0, 0.4);
+	}
+	/* Per-game-type bubble colors. Boss style below overrides. */
+	.node.game-facts .bubble {
+		background:
+			radial-gradient(ellipse at top, rgba(255, 255, 255, 0.25), transparent 60%),
+			linear-gradient(180deg, #d9a26b, #8a5524);
+		box-shadow:
+			inset 0 -6px 12px rgba(0, 0, 0, 0.5),
+			inset 0 4px 6px rgba(255, 230, 180, 0.4),
+			0 0 0 4px #5a3a1a,
+			0 8px 16px rgba(0, 0, 0, 0.6);
+	}
+	.node.game-numberline .bubble {
+		background:
+			radial-gradient(ellipse at top, rgba(255, 255, 255, 0.3), transparent 60%),
+			linear-gradient(180deg, #4ade80, #047857);
+		box-shadow:
+			inset 0 -6px 12px rgba(0, 0, 0, 0.45),
+			inset 0 4px 6px rgba(220, 252, 231, 0.4),
+			0 0 0 4px #064e3b,
+			0 8px 16px rgba(0, 0, 0, 0.6);
+	}
+	.node.game-bridge .bubble {
+		background:
+			radial-gradient(ellipse at top, rgba(255, 255, 255, 0.3), transparent 60%),
+			linear-gradient(180deg, #a78bfa, #6d28d9);
+		box-shadow:
+			inset 0 -6px 12px rgba(0, 0, 0, 0.45),
+			inset 0 4px 6px rgba(237, 233, 254, 0.4),
+			0 0 0 4px #4c1d95,
+			0 8px 16px rgba(0, 0, 0, 0.6);
 	}
 	.node.boss .bubble {
 		background:

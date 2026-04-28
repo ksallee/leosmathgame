@@ -1,7 +1,26 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
+	import { unlock } from '$lib/audio/sfx';
 	import '../app.css';
 
 	let { children } = $props();
+
+	// Warm up audio on the very first user interaction. Without this, the
+	// first in-game `play()` call races the unlock and gets swallowed — the
+	// kid hears no sound on their first win/lose, only from the second on.
+	onMount(() => {
+		const handler = () => {
+			unlock();
+			window.removeEventListener('pointerdown', handler);
+			window.removeEventListener('keydown', handler);
+		};
+		window.addEventListener('pointerdown', handler, { once: false });
+		window.addEventListener('keydown', handler, { once: false });
+		return () => {
+			window.removeEventListener('pointerdown', handler);
+			window.removeEventListener('keydown', handler);
+		};
+	});
 </script>
 
 {@render children()}

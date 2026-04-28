@@ -184,6 +184,19 @@
 		const saved = await loadProfile();
 		if (saved) profile = saved;
 		profile.lastViewedLevel = playLevel;
+		// Rotator gate: if the level we're about to play actually belongs to a
+		// different game type, hop sideways before mounting the facts session.
+		// Without this, /play/numberline → /play after a win lands on facts
+		// regardless of what the next level should be.
+		const game = gameForLevel(playLevel);
+		if (game === 'numberline') {
+			goto('/play/numberline');
+			return;
+		}
+		if (game === 'bridge') {
+			goto('/play/bridge');
+			return;
+		}
 		loaded = true;
 		startLevel();
 		loop();
@@ -375,11 +388,15 @@
 			goto('/levels');
 			return;
 		}
-		// Route via rotator — the next level may be the other game type.
+		// Route via rotator — the next level may be a different game type.
 		const nextLevel = profile.level;
 		const nextGame = gameForLevel(nextLevel);
-		if (nextGame !== 'facts') {
+		if (nextGame === 'numberline') {
 			goto('/play/numberline');
+			return;
+		}
+		if (nextGame === 'bridge') {
+			goto('/play/bridge');
 			return;
 		}
 		startLevel();

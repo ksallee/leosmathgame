@@ -4,13 +4,13 @@
 	import { page } from '$app/state';
 	import {
 		bandConfig,
-		NUMBERLINE_THEMES,
-		type NumberLineBand,
-		type QuestionKind,
-		type NumberlineTheme
-	} from '$lib/games/numberline';
-	import { nlBandFor, applyNlLevelOutcome } from '$lib/games/numberline/mastery';
-	import NumberlineScene from '$lib/games/numberline/NumberlineScene.svelte';
+		BRIDGE_THEMES,
+		BRIDGE_TOKENS,
+		type BridgeBand,
+		type BridgeWorld
+	} from '$lib/games/bridge';
+	import { bridgeBandFor, applyBridgeLevelOutcome } from '$lib/games/bridge/mastery';
+	import BridgeScene from '$lib/games/bridge/BridgeScene.svelte';
 	import { worldThemeFor } from '$lib/games/facts/levelConfig';
 	import {
 		loadProfile,
@@ -20,11 +20,17 @@
 		upsertLevelRecord,
 		type Profile
 	} from '$lib/storage/persist';
-	import { WIN_CORRECT, COINS_PER_WIN } from '$lib/games/facts/sessionConfig';
-	import { HEROES } from '$lib/sprites/manifest';
-	import { DEFAULT_HERO_ID } from '$lib/cosmetics/catalog';
+	import { COINS_PER_WIN } from '$lib/games/facts/sessionConfig';
 	import { play, unlock } from '$lib/audio/sfx';
 	import OutcomeCard from '$lib/components/game/OutcomeCard.svelte';
+
+	// Bridge questions are 3-4 sub-step taps each, so 4 questions per level
+	// keeps the total commit-count comparable to a 10-question facts level.
+	// See docs/research/bridge-design.md §5.
+	const BRIDGE_WIN_CORRECT = 4;
+	// 5 lives — each wrong sub-step costs one life. Lose at 5 cumulative
+	// wrong sub-steps (matches the lives semantics from facts/numberline).
+	const BRIDGE_LOSE_WRONGS = 5;
 
 	let profile: Profile = $state(emptyProfile());
 	let loaded = $state(false);
@@ -38,43 +44,33 @@
 		return r ? Number(r) : null;
 	});
 	const isReplay = $derived(replayLevel !== null);
-	// Pinned at finishLevel so incrementing profile.level (after a win) doesn't
-	// reactively bump playLevel and regenerate the on-screen question.
+	// Pinned at finishLevel so profile.level++ (after a win) doesn't bump
+	// playLevel and regenerate the question while the celebration is showing.
 	let frozenPlayLevel = $state<number | null>(null);
 	const playLevel = $derived(frozenPlayLevel ?? replayLevel ?? explicitLevel ?? profile.level);
 
-	const heroChar = $derived(HEROES[profile.inventory.equipped.hero] ?? HEROES[DEFAULT_HERO_ID]);
-	const themeId: NumberlineTheme = $derived(worldThemeFor(playLevel));
-	const theme = $derived(NUMBERLINE_THEMES[themeId]);
+	const worldId: BridgeWorld = $derived(worldThemeFor(playLevel) as BridgeWorld);
+	const theme = $derived(BRIDGE_THEMES[worldId]);
+	const token = $derived(BRIDGE_TOKENS[worldId]);
 
-	// Alternate kinds within a level so the kid sees both add and sub. Seed
-	// from level + question index so questions are deterministic per session.
 	let questionIdx = $state(0);
 	// Per-mount nonce so each session (including replays) gets fresh RNG.
-	// Without this, replaying the same level always produces identical questions.
 	const sessionNonce = Math.floor(Math.random() * 1_000_000);
-	const questionKind: QuestionKind = $derived(questionIdx % 2 === 0 ? 'add' : 'sub');
-	// Pinned at finishLevel so the scene doesn't visibly switch to a newly-advanced
-	// band during the celebration window before the OutcomeCard appears.
-	let frozenBand = $state<NumberLineBand | null>(null);
-	const currentBand = $derived(frozenBand ?? bandConfig(nlBandFor(profile.mastery, questionKind)));
+	// Pinned at finishLevel so the band visual doesn't swap to a newly-advanced
+	// band during the celebration window before the OutcomeCard.
+	let frozenBand = $state<BridgeBand | null>(null);
+	const currentBand = $derived(frozenBand ?? bandConfig(bridgeBandFor(profile.mastery)));
 	const questionSeed = $derived(playLevel * 1000003 + questionIdx + sessionNonce * 7919);
 
 	let correct = $state(0);
 	let wrong = $state(0);
 	let outcome = $state<'in_progress' | 'won' | 'lost'>('in_progress');
-	const LOSE_WRONGS = 5;
-
-	let perKindStats: Record<QuestionKind, { correct: number; total: number }> = $state({
-		add: { correct: 0, total: 0 },
-		sub: { correct: 0, total: 0 }
-	});
 
 	let lastEarnedCoins = $state(0);
 	let lastBonusCoins = $state(0);
 	let celebrationPhase: 'none' | 'celebrating' | 'overlay' = $state('none');
 	let celebrationTimer: ReturnType<typeof setTimeout> | null = null;
-	let bandUpKind: QuestionKind | null = null;
+	let bandedUp = false;
 
 	onMount(async () => {
 		const saved = await loadProfile();
@@ -95,54 +91,42 @@
 		if (loaded) await saveProfile(profile);
 	});
 
-	function onComplete(wasCorrect: boolean) {
+	function onStep(wasCorrect: boolean) {
+		// Per-sub-step HUD update: each wrong sub-step decrements lives in
+		// real time. End the level immediately if lives hit 0 mid-question.
+		if (outcome !== 'in_progress') return;
+		if (!wasCorrect) {
+			wrong += 1;
+			if (wrong >= BRIDGE_LOSE_WRONGS) finishLevel('lost');
+		}
+	}
+
+	function onComplete(wrongSteps: number) {
 		unlock();
 		if (outcome !== 'in_progress') return;
-		const kindNow = questionKind;
-		perKindStats[kindNow].total += 1;
-		if (wasCorrect) {
-			perKindStats[kindNow].correct += 1;
-			correct += 1;
-			play('correct', 0.5);
-		} else {
-			wrong += 1;
-			play('wrong', 0.5);
-		}
+		// `wrong` was already incremented per step via onStep — don't double.
+		// Question counts as "correct" only if all sub-steps were right on first try.
+		if (wrongSteps === 0) correct += 1;
 
-		if (correct >= WIN_CORRECT) {
+		if (correct >= BRIDGE_WIN_CORRECT) {
 			finishLevel('won');
 			return;
 		}
-		if (wrong >= LOSE_WRONGS) {
+		if (wrong >= BRIDGE_LOSE_WRONGS) {
 			finishLevel('lost');
 			return;
 		}
-		// Auto-advance after a brief inspection pause. Wrong answers already
-		// have a built-in reveal sequence (~1.5s) before onComplete fires, so
-		// 900ms here is enough for the kid to register the green check / red
-		// cross before the next question.
 		setTimeout(() => {
 			questionIdx += 1;
 		}, 900);
 	}
 
 	function finishLevel(result: 'won' | 'lost') {
-		// Snapshot band + playLevel so neither swaps when finishLevel mutates
-		// mastery and profile.level below. (Without freezing playLevel, the
-		// hero "snaps back" to a new question's startTick after a win.)
-		frozenBand = bandConfig(nlBandFor(profile.mastery, questionKind));
+		frozenBand = bandConfig(bridgeBandFor(profile.mastery));
 		frozenPlayLevel = playLevel;
 		outcome = result;
-		// Apply NL level outcome per kind (band advance / stay / demote).
-		bandUpKind = null;
-		for (const kind of ['add', 'sub'] as QuestionKind[]) {
-			const stats = perKindStats[kind];
-			if (stats.total === 0) continue;
-			const transition = applyNlLevelOutcome(profile.mastery, kind, stats.correct, stats.total);
-			if (transition.bandChanged && transition.toBand > transition.fromBand) {
-				bandUpKind = kind;
-			}
-		}
+		const transition = applyBridgeLevelOutcome(profile.mastery, correct, correct + wrong);
+		bandedUp = transition.bandChanged && transition.toBand > transition.fromBand;
 
 		if (result === 'won') {
 			const stars = starsForOutcome(wrong);
@@ -156,9 +140,7 @@
 			}
 			profile.lastViewedLevel = playLevel;
 			play('win', 0.4);
-			if (bandUpKind) {
-				setTimeout(() => play('level_up', 0.45), 700);
-			}
+			if (bandedUp) setTimeout(() => play('level_up', 0.45), 700);
 			void saveProfile(profile);
 		} else {
 			play('lose', 0.3);
@@ -174,16 +156,19 @@
 	}
 
 	const earnedStars = $derived(outcome === 'won' ? starsForOutcome(wrong) : 0);
-	const levelUpKind: 'band' | 'stage' | null = $derived(bandUpKind ? 'band' : null);
+	const levelUpKind: 'band' | 'stage' | null = $derived(bandedUp ? 'band' : null);
 
 	async function nextAction() {
 		await saveProfile(profile);
+		if (outcome === 'lost') {
+			// "Réessayer" — reload to reset scene state cleanly.
+			window.location.reload();
+			return;
+		}
 		if (isReplay) {
 			goto('/levels');
 			return;
 		}
-		// Hard reload to /play — the rotator on /levels will route to whichever
-		// game type the new playLevel needs.
 		goto('/play');
 	}
 
@@ -194,7 +179,6 @@
 </script>
 
 <div class="page">
-	<!-- HUD -->
 	<div class="hud-top">
 		<button class="hud-back" onclick={goLevels} aria-label="Carte des niveaux">←</button>
 		<div class="hud-level">
@@ -208,17 +192,20 @@
 				<div class="hud-row">
 					<div class="hud-pill score-pill">
 						✓ <span class="hi">{correct}</span>
-						<span class="dim">/ {WIN_CORRECT}</span>
+						<span class="dim">/ {BRIDGE_WIN_CORRECT}</span>
 					</div>
 					<div class="hud-pill lives-pill" aria-label="Vies restantes">
-						❤ <span class="num">{Math.max(0, LOSE_WRONGS - wrong)}</span>
+						❤ <span class="num">{Math.max(0, BRIDGE_LOSE_WRONGS - wrong)}</span>
 					</div>
 					<div class="hud-pill coin-pill">
 						🪙 <span class="num">{profile.coins}</span>
 					</div>
 				</div>
 				<div class="progressbar" aria-label="Progression vers la victoire">
-					<div class="progressbar-fill" style="width: {(correct / WIN_CORRECT) * 100}%"></div>
+					<div
+						class="progressbar-fill"
+						style="width: {(correct / BRIDGE_WIN_CORRECT) * 100}%"
+					></div>
 				</div>
 			</div>
 		</div>
@@ -226,19 +213,10 @@
 
 	<div class="scene-wrap">
 		<!-- Key on playLevel so re-entering the same route after navigation
-		     forces a fresh component instance. Without this, internal scene
-		     state (heroTick, phase, lastSeenSeed) can survive into the next
-		     visit and the hero appears at the previous question's end position. -->
+		     forces a fresh BridgeScene instance — otherwise internal state can
+		     survive into the next visit. -->
 		{#key playLevel}
-			<NumberlineScene
-				band={currentBand}
-				{theme}
-				character={heroChar}
-				{questionKind}
-				{questionSeed}
-				heroHeight={96}
-				{onComplete}
-			/>
+			<BridgeScene band={currentBand} {theme} {token} {questionSeed} {onStep} {onComplete} />
 		{/key}
 	</div>
 
@@ -279,9 +257,6 @@
 	.scene-wrap :global(.scene) {
 		flex: 1;
 	}
-
-	/* HUD — same shape as /play's facts HUD. Could be extracted to a shared
-	   component later if both keep the same structure. */
 	.hud-top {
 		position: absolute;
 		top: 0;

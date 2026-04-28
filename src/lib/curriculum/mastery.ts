@@ -47,7 +47,8 @@ export function createState(): MasteryState {
 		unlockedOps: [],
 		fastCorrectStreaks: {},
 		pendingBridges: [],
-		numberline: { band: {} }
+		numberline: { band: {} },
+		bridge: { band: 1 }
 	};
 }
 
